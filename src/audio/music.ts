@@ -1,175 +1,131 @@
+const INTRO_TRACKS = ["/audio/music/intro-1.mp3", "/audio/music/intro-2.mp3"];
+const DAY_TRACKS = [
+  "/audio/music/day-1.mp3",
+  "/audio/music/day-2.mp3",
+  "/audio/music/day-3.mp3",
+  "/audio/music/day-4.mp3",
+  "/audio/music/day-5.mp3",
+];
+
+type MusicMode = "intro" | "day" | null;
+
 /**
- * Procedural soundtrack.
+ * Track player for the authored Car Boy soundtrack.
  *
- * Synthesised rather than streamed: there is no asset pipeline here, and a loop
- * short enough to ship as audio would wear out fast anyway. Instead a small
- * scheduler plays a chord cycle with a plucked lead over it, and the arrangement
- * thins or thickens with what is happening on screen — so the music tracks the
- * fight instead of running underneath it.
- *
- * Notes are scheduled a beat ahead against the AudioContext clock, never against
- * frame timing. Frame-timed audio jitters audibly the moment the frame rate moves.
+ * The HTML audio element keeps the music independent from the effect mixer, so
+ * pause-menu music mute never silences coins, impacts, or the engine.
  */
-
-/** Phrygian-flavoured cycle: the flat second is what gives it the Mediterranean tilt. */
-const PROGRESSION = [
-  [0, 3, 7], // i
-  [1, 5, 8], // bII  ← the Phrygian colour
-  [-2, 3, 7], // bVII
-  [0, 3, 7], // i
-];
-
-/** Lead phrase, scale degrees over the cycle. -99 is a rest. */
-const LEAD = [
-  0, 3, 7, 3, -99, 7, 10, 7,
-  1, 5, 8, 5, -99, 8, 12, 8,
-  -2, 3, 7, 10, -99, 7, 3, 0,
-  0, 3, 7, 12, 10, 7, 3, -99,
-];
-
 export class Music {
-  private ctx: AudioContext | null = null;
-  private bus: GainNode | null = null;
-  private noise: AudioBuffer | null = null;
+  private current: HTMLAudioElement | null = null;
+  private currentKey = "";
+  private mode: MusicMode = null;
+  private dayIndex = 0;
+  private introIndex = 0;
+  private attached = false;
+  private paused = false;
+  private muted = false;
+  private volume = 0.38;
 
-  private step = 0;
-  private nextNoteAt = 0;
-  private started = false;
-
-  /** 0..1 — how hot the fight is. Drives percussion and lead density. */
+  /** Kept as a public cue for the existing gameplay HUD/audio integration. */
   intensity = 0;
-  private smoothed = 0;
 
-  private readonly bpm = 132;
-  private get stepDur(): number {
-    // Eighth notes.
-    return 30 / this.bpm;
+  attach(_ctx: AudioContext, _master: GainNode, _noise: AudioBuffer): void {
+    this.attached = true;
+    if (this.mode === "intro") this.startIntro(this.introIndex);
+    else if (this.mode === "day") this.startDay(this.dayIndex);
   }
 
-  attach(ctx: AudioContext, master: GainNode, noise: AudioBuffer): void {
-    this.ctx = ctx;
-    this.noise = noise;
-    this.bus = ctx.createGain();
-    this.bus.gain.value = 0.34;
-    this.bus.connect(master);
-    this.nextNoteAt = ctx.currentTime + 0.1;
-    this.started = true;
+  playIntro(): void {
+    this.mode = "intro";
+    if (this.current && this.currentKey.startsWith("intro:")) return;
+    this.startIntro(this.introIndex);
   }
 
-  setVolume(v: number): void {
-    if (this.bus) this.bus.gain.value = v;
+  playDay(day: number): void {
+    const index = Math.max(0, Math.min(DAY_TRACKS.length - 1, day - 1));
+    this.mode = "day";
+    this.dayIndex = index;
+    if (this.current && this.currentKey === "day:" + index) return;
+    this.startDay(index);
   }
 
-  /** Pump the scheduler. Safe to call every frame. */
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (this.current) this.current.muted = muted;
+  }
+
+  isMuted(): boolean {
+    return this.muted;
+  }
+
+  setVolume(volume: number): void {
+    this.volume = Math.max(0, Math.min(1, volume));
+    if (this.current) this.current.volume = this.volume;
+  }
+
+  pause(): void {
+    this.paused = true;
+    this.current?.pause();
+  }
+
+  resume(): void {
+    this.paused = false;
+    if (this.current) void this.current.play().catch(() => undefined);
+    else if (this.mode === "intro") this.startIntro(this.introIndex);
+    else if (this.mode === "day") this.startDay(this.dayIndex);
+  }
+
+  /** The main loop still calls this; authored tracks do not need a scheduler. */
   update(): void {
-    if (!this.started || !this.ctx || !this.bus) return;
-    this.smoothed += (this.intensity - this.smoothed) * 0.02;
-
-    // Schedule everything falling due in the next 200 ms.
-    const horizon = this.ctx.currentTime + 0.2;
-    let guard = 0;
-    while (this.nextNoteAt < horizon && guard++ < 32) {
-      this.playStep(this.step, this.nextNoteAt);
-      this.step = (this.step + 1) % 32;
-      this.nextNoteAt += this.stepDur;
-    }
+    // Playback is driven by the audio element clock.
   }
 
-  private playStep(step: number, when: number): void {
-    const bar = Math.floor(step / 8) % PROGRESSION.length;
-    const chord = PROGRESSION[bar];
-    const beat = step % 8;
-    const hot = this.smoothed;
-
-    // --- bass: root on the beat, fifth on the off-beat push ---
-    if (beat === 0 || beat === 3 || beat === 6) {
-      const semi = chord[0] + (beat === 6 ? 7 : 0);
-      this.pluck(this.hz(semi, 2), when, 0.34, 0.42, "triangle");
-    }
-
-    // --- chord stabs on the backbeat, mandolin-ish ---
-    if (beat === 2 || beat === 5) {
-      for (const s of chord) this.pluck(this.hz(s, 4), when, 0.1, 0.2, "sawtooth");
-    }
-
-    // --- lead phrase, thinning out when nothing is happening ---
-    const note = LEAD[step];
-    if (note !== -99 && (hot > 0.18 || beat % 2 === 0)) {
-      this.pluck(this.hz(note, 5), when, 0.13 + hot * 0.1, 0.3, "square");
-    }
-
-    // --- percussion, entering with intensity ---
-    if (hot > 0.08) {
-      if (beat === 0 || beat === 4) this.kick(when, 0.4 + hot * 0.3);
-      if (beat % 2 === 1) this.hat(when, 0.055 + hot * 0.08);
-    }
+  private startIntro(index: number): void {
+    if (!this.attached) return;
+    const safeIndex = ((index % INTRO_TRACKS.length) + INTRO_TRACKS.length) % INTRO_TRACKS.length;
+    this.introIndex = safeIndex;
+    this.startTrack(
+      INTRO_TRACKS[safeIndex],
+      "intro:" + safeIndex,
+      () => {
+        if (this.mode !== "intro") return;
+        this.startIntro((safeIndex + 1) % INTRO_TRACKS.length);
+      }
+    );
   }
 
-  /** Semitone offset from A, at a given octave. */
-  private hz(semi: number, octave: number): number {
-    return 27.5 * Math.pow(2, octave + semi / 12);
+  private startDay(index: number): void {
+    if (!this.attached) return;
+    this.dayIndex = index;
+    this.startTrack(
+      DAY_TRACKS[index],
+      "day:" + index,
+      () => {
+        if (this.mode !== "day" || this.dayIndex !== index) return;
+        this.current = null;
+        this.currentKey = "";
+        this.startDay(index);
+      }
+    );
   }
 
-  /** Short plucked note: fast attack, exponential decay, no sustain. */
-  private pluck(
-    freq: number,
-    when: number,
-    gain: number,
-    life: number,
-    type: OscillatorType
-  ): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.bus) return;
-    const osc = ctx.createOscillator();
-    osc.type = type;
-    osc.frequency.value = freq;
-    // Slight detune per note keeps repeated phrases from sounding machine-stamped.
-    osc.detune.value = (Math.random() - 0.5) * 9;
+  private startTrack(url: string, key: string, onEnded: () => void): void {
+    if (this.currentKey === key && this.current) {
+      if (!this.paused && this.current.paused) void this.current.play().catch(() => undefined);
+      return;
+    }
 
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.setValueAtTime(Math.min(7000, freq * 7), when);
-    lp.frequency.exponentialRampToValueAtTime(Math.max(220, freq * 1.7), when + life);
+    this.current?.pause();
+    this.current = null;
+    this.currentKey = key;
 
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0, when);
-    env.gain.linearRampToValueAtTime(gain, when + 0.008);
-    env.gain.exponentialRampToValueAtTime(0.0001, when + life);
-
-    osc.connect(lp).connect(env).connect(this.bus);
-    osc.start(when);
-    osc.stop(when + life + 0.02);
-  }
-
-  private kick(when: number, gain: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.bus) return;
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(120, when);
-    osc.frequency.exponentialRampToValueAtTime(44, when + 0.1);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(gain, when);
-    env.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
-    osc.connect(env).connect(this.bus);
-    osc.start(when);
-    osc.stop(when + 0.2);
-  }
-
-  private hat(when: number, gain: number): void {
-    const ctx = this.ctx;
-    if (!ctx || !this.bus || !this.noise) return;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    src.playbackRate.value = 2.2;
-    const hp = ctx.createBiquadFilter();
-    hp.type = "highpass";
-    hp.frequency.value = 7200;
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(gain, when);
-    env.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
-    src.connect(hp).connect(env).connect(this.bus);
-    src.start(when);
-    src.stop(when + 0.07);
+    const element = document.createElement("audio");
+    element.src = url;
+    element.preload = "auto";
+    element.volume = this.volume;
+    element.muted = this.muted;
+    element.onended = onEnded;
+    this.current = element;
+    if (!this.paused) void element.play().catch(() => undefined);
   }
 }

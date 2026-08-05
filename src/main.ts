@@ -30,6 +30,7 @@ import { Progression } from "./gameplay/progression";
 import { Onboarding } from "./ui/onboarding";
 import { SpeedLines } from "./ui/screenFx";
 import { EdgeDrama } from "./gameplay/edgeDrama";
+import { PauseMenu } from "./ui/pauseMenu";
 
 const frame = document.getElementById("frame")!;
 const canvas = document.getElementById("render") as HTMLCanvasElement;
@@ -57,10 +58,32 @@ const app = new App(canvas);
 const overlay = new DevOverlay(frame);
 const controls = new Controls(canvas, button.element);
 const audio = new Audio();
+let gamePaused = false;
+let introGrace = 0;
+const pauseMenu = new PauseMenu(frame, {
+  onPaused: (paused) => {
+    gamePaused = paused;
+    if (paused) audio.pause();
+    else audio.resume();
+  },
+  onMusicMuted: (muted) => audio.music.setMuted(muted),
+  onSfxMuted: (muted) => audio.setSfxMuted(muted),
+});
 
 // Browsers refuse to start audio without a gesture; the first touch anywhere does.
 for (const ev of ["pointerdown", "keydown"]) {
-  window.addEventListener(ev, () => audio.unlock(), { once: false });
+  window.addEventListener(
+    ev,
+    () => {
+      const wasIntro = titleScreen.open;
+      audio.unlock();
+      if (wasIntro) {
+        audio.music.playIntro();
+        introGrace = 0.45;
+      }
+    },
+    { once: false, capture: true }
+  );
 }
 
 const world = await PhysicsWorld.create(app.scene);
@@ -237,6 +260,13 @@ let hapticT = 0;
 let scuffT = 0;
 
 function frameUpdate(rawDt: number): void {
+  introGrace = Math.max(0, introGrace - rawDt);
+  pauseMenu.setVisible(!titleScreen.open && !upgradeScreen.open && !dayPaused);
+  if (gamePaused) return;
+  if (!titleScreen.open && !upgradeScreen.open && !dayPaused && introGrace <= 0) {
+    audio.music.playDay(progress.day);
+  }
+
   // Hit-stop scales gameplay time only. The camera, scenery and UI keep running,
   // which is what makes the freeze read as impact rather than as a dropped frame.
   // Edge suspense (§2.9) scales gameplay time; the simulation itself is untouched,
@@ -622,6 +652,7 @@ async function endOfDay(): Promise<void> {
   dayCoinsStart = pickups.collected;
   respawnT = 0.8;
   dayPaused = false;
+  audio.music.playDay(progress.day);
   banners.show(`DAY ${progress.day}`, "#7fe0a0", 1.6);
 }
 

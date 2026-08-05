@@ -40,6 +40,26 @@ export class Audio {
 
   muted = false;
 
+  setSfxMuted(muted: boolean): void {
+    this.muted = muted;
+    if (!this.ctx) return;
+    const now = this.t;
+    this.engineGain?.gain.setTargetAtTime(muted ? 0 : 0, now, 0.02);
+    this.chargeGain?.gain.setTargetAtTime(muted ? 0 : 0.0001, now, 0.02);
+  }
+
+  pause(): void {
+    this.music.pause();
+    if (!this.ctx) return;
+    const now = this.t;
+    this.engineGain?.gain.setTargetAtTime(0, now, 0.02);
+    this.chargeGain?.gain.setTargetAtTime(0, now, 0.02);
+  }
+
+  resume(): void {
+    this.music.resume();
+  }
+
   /** Call from a user gesture. Safe to call repeatedly. */
   unlock(): void {
     if (this.ctx) {
