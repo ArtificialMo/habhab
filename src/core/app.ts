@@ -38,6 +38,7 @@ export class App {
   private hitStop = 0;
   private impactSlow = 0;
   private impactSlowScale = 1;
+  private titleClock = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const sharedArtifact = Boolean((globalThis as { __CARBOY_SHARE__?: boolean }).__CARBOY_SHARE__);
@@ -123,6 +124,43 @@ export class App {
 
   private readonly dramaPoint = new Vector3();
   private dramaWeight = 0;
+
+  /** Wider, gently drifting title framing. Gameplay uses updateCamera below. */
+  updateTitleCamera(dt: number): void {
+    const c = TUNING.camera;
+    this.titleClock += dt;
+    const k = 1 - Math.exp(-1.8 * dt);
+    const targetX = 4 + Math.sin(this.titleClock * 0.22) * 2.4;
+    const targetZ = 8 + Math.cos(this.titleClock * 0.17) * 1.8;
+    this.camTarget.x += (targetX - this.camTarget.x) * k;
+    this.camTarget.z += (targetZ - this.camTarget.z) * k;
+
+    let jx = 0;
+    let jy = 0;
+    if (this.shake > 0.0005) {
+      this.shakePhase += dt * c.shakeFrequency * Math.PI * 2;
+      const env = this.shake;
+      jx = Math.sin(this.shakePhase) * env * this.shakeDir.x;
+      jy = Math.sin(this.shakePhase * 1.37 + 0.8) * env * this.shakeDir.z;
+      this.shake = Math.max(0, this.shake - c.shakeDecay * dt * this.shake - 0.0008);
+    } else {
+      this.shake = 0;
+    }
+    if (this.zoom > 0.0001) this.zoom = Math.max(0, this.zoom - c.zoomRecover * dt * this.zoom - 0.0002);
+
+    const distance = c.distance * 1.82;
+    const height = c.height * 1.82;
+    this.camera.fov = c.fov + 0.1 - this.zoom;
+    this.camera.position.set(this.camTarget.x + jx, height + jy, this.camTarget.z - distance);
+    if (this.renderingPipeline) {
+      this.renderingPipeline.depthOfField.focusDistance = Math.max(
+        48,
+        Math.hypot(this.camera.position.x - this.camTarget.x, this.camera.position.y, this.camera.position.z - this.camTarget.z)
+      );
+    }
+    this.cameraLook.set(this.camTarget.x + jx * 0.35, 0, this.camTarget.z);
+    this.camera.setTarget(this.cameraLook);
+  }
 
   /** Camera follows the player with lag, leading slightly toward their heading. */
   updateCamera(target: Vector3, heading: Vector3, dt: number): void {

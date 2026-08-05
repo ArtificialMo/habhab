@@ -1,8 +1,8 @@
 const INTRO_TRACKS = ["/audio/music/intro-1.mp3", "/audio/music/intro-2.mp3"];
 const DAY_TRACKS = [
   "/audio/music/day-1.mp3",
-  "/audio/music/day-2.mp3",
   "/audio/music/day-3.mp3",
+  "/audio/music/day-2.mp3",
   "/audio/music/day-4.mp3",
   "/audio/music/day-5.mp3",
 ];
@@ -28,7 +28,7 @@ export class Music {
   private attached = false;
   private paused = false;
   private muted = false;
-  private volume = 0.38;
+  private volume = 0.52;
 
   /** Kept as a public cue for the existing gameplay HUD/audio integration. */
   intensity = 0;
@@ -140,11 +140,15 @@ export class Music {
     const inline = (globalThis as MusicGlobals).__CARBOY_MUSIC__;
     element.src = inline?.[url] ?? url;
     element.preload = "auto";
+    element.autoplay = true;
     element.setAttribute("playsinline", "");
     element.setAttribute("aria-hidden", "true");
-    element.volume = this.volume;
+    element.volume = this.mode === "intro" ? Math.max(this.volume, 0.58) : this.volume;
     element.muted = this.muted;
     element.onended = onEnded;
+    element.oncanplay = () => {
+      if (this.current === element && !this.paused) this.playCurrent();
+    };
     element.style.display = "none";
     document.body.appendChild(element);
     this.current = element;

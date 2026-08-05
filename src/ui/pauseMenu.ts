@@ -13,6 +13,7 @@ export interface PauseMenuOptions {
 export class PauseMenu {
   private readonly pauseButton: HTMLButtonElement;
   private readonly root: HTMLDivElement;
+  private readonly pauseIcon: HTMLSpanElement;
   private readonly musicButton: HTMLButtonElement;
   private readonly sfxButton: HTMLButtonElement;
   private readonly options: PauseMenuOptions;
@@ -28,10 +29,24 @@ export class PauseMenu {
     this.pauseButton.setAttribute("aria-label", "Pause game");
     this.pauseButton.style.cssText =
       "position:absolute;top:12px;right:12px;z-index:14;display:none;" +
-      "min-width:76px;padding:9px 12px;cursor:pointer;" +
+      "width:54px;height:54px;padding:0;cursor:pointer;" +
+      "display:grid;place-items:center;" +
       "font-family:" + UI_FONT + ";" +
       displayType(12) +
       slateStyle(6);
+    this.pauseIcon = document.createElement("span");
+    this.pauseIcon.setAttribute("aria-hidden", "true");
+    this.pauseIcon.style.cssText =
+      "display:flex;align-items:center;justify-content:center;gap:7px;" +
+      "width:24px;height:26px;";
+    for (let i = 0; i < 2; i++) {
+      const pillar = document.createElement("span");
+      pillar.style.cssText =
+        "display:block;width:7px;height:24px;border-radius:2px;" +
+        "background:#1b2639;box-shadow:inset 1px 0 0 rgba(255,255,255,.65);";
+      this.pauseIcon.appendChild(pillar);
+    }
+    this.pauseButton.appendChild(this.pauseIcon);
     this.pauseButton.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -114,7 +129,6 @@ export class PauseMenu {
     if (this.open === open) return;
     this.open = open;
     this.root.style.display = open ? "flex" : "none";
-    this.pauseButton.textContent = open ? "RESUME" : "PAUSE";
     this.pauseButton.setAttribute("aria-label", open ? "Resume game" : "Pause game");
     this.options.onPaused(open);
   }

@@ -43,7 +43,6 @@ const banners = new Banners(frame);
 const upgradeScreen = new UpgradeScreen(frame);
 // A card press kicks the camera, so the slate feels struck rather than clicked.
 upgradeScreen.onShake = (amount) => app.addImpact(14 * amount);
-const titleScreen = new TitleScreen(frame, () => beginCountdown());
 const progress = new Progression();
 let elapsed = 0;
 let dayKills = 0;
@@ -66,6 +65,19 @@ controls.onSteerStart = (x, y) => steerPad.show(x, y);
 controls.onSteerMove = (x, y) => steerPad.move(x, y);
 controls.onSteerEnd = () => steerPad.hide();
 const audio = new Audio();
+const titleScreen = new TitleScreen(
+  frame,
+  () => {
+    audio.unlock();
+    audio.music.playIntro();
+  },
+  () => beginCountdown(),
+  (amount) => app.addImpact(amount)
+);
+// Try the intro immediately when the page allows media autoplay. The start
+// button repeats this exact path as a user gesture on browsers that block it.
+audio.unlock();
+audio.music.playIntro();
 let gamePaused = false;
 let introGrace = 0;
 let countdownValue = 0;
@@ -325,7 +337,7 @@ function frameUpdate(rawDt: number): void {
     controls.released = false;
     onboarding.setHidden(true);
     environment.update(rawDt);
-    app.updateCamera(player.vehicle.position, player.vehicle.forward, rawDt);
+    app.updateTitleCamera(rawDt);
     banners.update(rawDt);
     controls.endFrame();
     return;
