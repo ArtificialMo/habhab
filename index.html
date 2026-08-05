@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Car Boy</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #202225;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior: none;
+      }
+      /* Portrait 9:16 play surface, letterboxed on wide screens (§2.3). */
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #frame {
+        position: relative;
+        height: 100%;
+        aspect-ratio: 9 / 16;
+        max-width: 100%;
+        background: #2b2e33;
+        overflow: hidden;
+      }
+      #render {
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><div id="frame"><canvas id="render"></canvas></div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
