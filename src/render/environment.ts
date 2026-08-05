@@ -2,6 +2,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
@@ -612,6 +613,8 @@ export class Environment {
       this.clouds.push({ mesh: merged, speed: 0.5 + seeded() * 0.9 });
     }
 
+    this.buildSoftClouds(scene);
+
     for (let i = 0; i < 5; i++) {
       const node = new TransformNode(`gull${i}`, scene);
       for (const side of [-1, 1]) {
@@ -630,6 +633,42 @@ export class Environment {
         phase: seeded() * Math.PI * 2,
         y: 22 + seeded() * 14,
       });
+    }
+  }
+
+  /** Large alpha-soft cloud cards sit high and wide, framing the playable island. */
+  private buildSoftClouds(scene: Scene): void {
+    const cloudTexture = softCloudTexture(scene);
+    const cloudMat = new StandardMaterial("softCloudMat", scene);
+    cloudMat.diffuseTexture = cloudTexture;
+    cloudMat.useAlphaFromDiffuseTexture = true;
+    cloudMat.diffuseColor = new Color3(1, 1, 1);
+    cloudMat.emissiveColor = new Color3(0.92, 0.95, 1);
+    cloudMat.specularColor = Color3.Black();
+    cloudMat.disableLighting = true;
+    cloudMat.backFaceCulling = false;
+    cloudMat.alpha = 0.68;
+
+    const framing = [
+      { x: -30, y: 23, z: 56, width: 28, height: 12, speed: 0.2 },
+      { x: 28, y: 27, z: 66, width: 34, height: 14, speed: 0.26 },
+      { x: -8, y: 34, z: 92, width: 42, height: 17, speed: 0.14 },
+      { x: 37, y: 18, z: 38, width: 22, height: 9, speed: 0.32 },
+      { x: -38, y: 17, z: 32, width: 24, height: 10, speed: 0.28 },
+    ];
+
+    for (const [index, cloud] of framing.entries()) {
+      const plane = MeshBuilder.CreatePlane(
+        "softCloud" + index,
+        { width: cloud.width, height: cloud.height },
+        scene
+      );
+      plane.position.set(cloud.x, cloud.y, cloud.z);
+      plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+      plane.material = cloudMat;
+      plane.isPickable = false;
+      plane.renderingGroupId = 0;
+      this.clouds.push({ mesh: plane, speed: cloud.speed });
     }
   }
 
@@ -659,6 +698,34 @@ export class Environment {
       g.node.rotation.z = Math.sin(this.time * 6 + g.phase) * 0.22;
     }
   }
+}
+
+function softCloudTexture(scene: Scene): DynamicTexture {
+  const size = { width: 256, height: 128 };
+  const texture = new DynamicTexture("softCloudTexture", size, scene, false);
+  const ctx = texture.getContext() as CanvasRenderingContext2D;
+  ctx.clearRect(0, 0, size.width, size.height);
+
+  const blobs = [
+    { x: 38, y: 80, rx: 56, ry: 30 },
+    { x: 94, y: 54, rx: 70, ry: 42 },
+    { x: 158, y: 64, rx: 68, ry: 38 },
+    { x: 218, y: 82, rx: 52, ry: 28 },
+  ];
+  for (const blob of blobs) {
+    const gradient = ctx.createRadialGradient(blob.x, blob.y, 0, blob.x, blob.y, Math.max(blob.rx, blob.ry));
+    gradient.addColorStop(0, "rgba(255,255,255,0.78)");
+    gradient.addColorStop(0.48, "rgba(255,255,255,0.45)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.ellipse(blob.x, blob.y, blob.rx, blob.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  texture.hasAlpha = true;
+  texture.update();
+  return texture;
 }
 
 /** Small deterministic PRNG, so scenery layout is identical every run. */

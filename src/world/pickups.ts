@@ -61,6 +61,8 @@ interface Coin {
   alive: boolean;
   /** 0 while loose, ramps to 1 while being pulled in. */
   pull: number;
+  /** Seconds into the brief touch-grow-sparkle exit, or -1 when idle. */
+  collectT: number;
   vx: number;
   vz: number;
 }
@@ -145,7 +147,7 @@ export class Pickups {
 
     this.matrices = new Float32Array(capacity * 16);
     for (let i = 0; i < capacity; i++) {
-      this.coins.push({ x: 0, z: 0, y: -50, phase: 0, alive: false, pull: 0, vx: 0, vz: 0 });
+      this.coins.push({ x: 0, z: 0, y: -50, phase: 0, alive: false, pull: 0, collectT: -1, vx: 0, vz: 0 });
       Matrix.ScalingToRef(0, 0, 0, this.scratch);
       this.scratch.copyToArray(this.matrices, i * 16);
     }
@@ -179,6 +181,7 @@ export class Pickups {
       c.vz = Math.sin(a) * speed;
       c.phase = Math.random() * Math.PI * 2;
       c.pull = 0;
+      c.collectT = -1;
       c.alive = true;
     }
   }
@@ -212,6 +215,24 @@ export class Pickups {
       const dz = playerZ - c.z;
       const dist = Math.hypot(dx, dz);
 
+      let visualScale = 1;
+      if (c.collectT >= 0) {
+        const phase = Math.min(1, c.collectT / 0.16);
+        const ease = 1 - Math.pow(1 - phase, 3);
+        c.x += (playerX - c.x) * Math.min(1, dt * 18);
+        c.z += (playerZ - c.z) * Math.min(1, dt * 18);
+        c.y += (0.65 + ease * 0.24 - c.y) * Math.min(1, dt * 18);
+        visualScale = 1 + ease * 1.25;
+        c.collectT += dt;
+        if (phase >= 1) {
+          c.alive = false;
+          c.y = -50;
+          Matrix.ScalingToRef(0, 0, 0, this.scratch);
+          this.scratch.copyToArray(this.matrices, i * 16);
+          this.scratch.copyToArray(this.shadowMatrices, i * 16);
+          continue;
+        }
+      } else {
       if (dist < magnetRadius) {
         // Ease in rather than snapping to full attraction, so coins peel off the
         // ground and stream toward the car instead of teleporting at the boundary.
@@ -235,15 +256,13 @@ export class Pickups {
       c.vz *= k;
 
       if (dist < 1.05) {
-        c.alive = false;
+        c.collectT = 0;
+        c.pull = 0;
+        c.vx = 0;
+        c.vz = 0;
         this.collected++;
         picked++;
         this.collectedAt.push({ x: c.x, y: c.y, z: c.z });
-        c.y = -50;
-        Matrix.ScalingToRef(0, 0, 0, this.scratch);
-        this.scratch.copyToArray(this.matrices, i * 16);
-        this.scratch.copyToArray(this.shadowMatrices, i * 16);
-        continue;
       }
 
       // Loose coins are kept on solid ground. A coin that skitters out over the
@@ -261,9 +280,11 @@ export class Pickups {
 
       // Coins spin, and tilt harder the faster they are travelling — a streaming
       // coin reads as being pulled rather than sliding.
+      }
+
       const spin = this.time * 6 + c.phase;
       Matrix.ComposeToRef(
-        new Vector3(1, 1, 1),
+        new Vector3(visualScale, visualScale, visualScale),
         Quaternion.RotationYawPitchRoll(spin, Math.PI / 2 - c.pull * 0.7, 0),
         new Vector3(c.x, c.y, c.z),
         this.scratch
@@ -272,7 +293,8 @@ export class Pickups {
 
       // Shadow shrinks and fades as the coin lifts — the cue that sells height.
       const lift = Math.max(0, c.y - 0.24);
-      const sc = Math.max(0.25, 1 - lift * 0.9);
+      const collectFade = c.collectT >= 0 ? Math.max(0, 1 - c.collectT / 0.16) : 1;
+      const sc = Math.max(0, Math.max(0.25, 1 - lift * 0.9) * collectFade);
       Matrix.ComposeToRef(
         new Vector3(sc, 1, sc),
         Quaternion.Identity(),

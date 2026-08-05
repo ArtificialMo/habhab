@@ -316,6 +316,39 @@ export class Audio {
   private coinStep = 0;
   private coinLastAt = -99;
 
+  /** A short set of high, staggered pitch lines layered over the recorded strike. */
+  private coinTwinkle(root: number, step: number): void {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master || this.muted) return;
+
+    const startAt = this.t;
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(0.78, startAt);
+    bus.connect(master);
+    const ratios = [1.2, 1.48, 2.08];
+    for (let i = 0; i < ratios.length; i++) {
+      const start = startAt + i * 0.022;
+      const osc = ctx.createOscillator();
+      osc.type = i === 0 ? "triangle" : "sine";
+      const startFrequency = root * ratios[i];
+      osc.frequency.setValueAtTime(startFrequency, start);
+      osc.frequency.exponentialRampToValueAtTime(
+        startFrequency * (1.025 + step * 0.004),
+        start + 0.12
+      );
+
+      const env = ctx.createGain();
+      const amp = (0.15 + Math.min(0.08, step * 0.006)) / (1 + i * 0.24);
+      env.gain.setValueAtTime(0.0001, start);
+      env.gain.exponentialRampToValueAtTime(amp, start + 0.006);
+      env.gain.exponentialRampToValueAtTime(0.0001, start + 0.28 + i * 0.06);
+      osc.connect(env).connect(bus);
+      osc.start(start);
+      osc.stop(start + 0.36 + i * 0.06);
+    }
+  }
+
   /**
    * Coin pickup: a struck metal disc, not a tone.
    *
@@ -337,11 +370,18 @@ export class Audio {
     // Prefer the recorded coin/metal drop. The old inharmonic ring is retained as
     // an offline fallback for a blocked asset request, never as the primary coin
     // voice when the bundled field recording is available.
-    if (this.playSample("coin", 0.28 + Math.min(0.12, this.coinStep * 0.012), 0.92 + semis / 48, 0, 0.72)) {
+    const root = 1050 * Math.pow(2, semis / 12);
+    const recorded = this.playSample(
+      "coin",
+      0.46 + Math.min(0.2, this.coinStep * 0.018),
+      1 + semis / 36,
+      0,
+      0.72
+    );
+    this.coinTwinkle(root, this.coinStep);
+    if (recorded) {
       return;
     }
-
-    const root = 1050 * Math.pow(2, semis / 12);
 
     const t = this.t;
     const out = this.ctx.createGain();

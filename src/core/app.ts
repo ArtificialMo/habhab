@@ -4,6 +4,8 @@ import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
+import { DepthOfFieldEffectBlurLevel } from "@babylonjs/core/PostProcesses/depthOfFieldEffect";
 import "@babylonjs/core/Physics/v2/physicsEngineComponent";
 import "@babylonjs/core/Meshes/Builders/boxBuilder";
 import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
@@ -26,6 +28,7 @@ export class App {
 
   private readonly camTarget = new Vector3(0, 0, 0);
   private readonly lead = new Vector3(0, 0, 0);
+  private readonly renderingPipeline: DefaultRenderingPipeline;
 
   private shake = 0;
   private shakePhase = 0;
@@ -58,6 +61,19 @@ export class App {
     this.camera.minZ = 1;
     this.camera.maxZ = 700;
     this.camera.setTarget(Vector3.Zero());
+
+    // A restrained focus pass keeps the platform and Car Boy crisp while the
+    // high clouds, sea and distant isles fall gently out of focus. Low blur keeps
+    // the cel silhouettes readable on mobile and lets the depth cue feel cinematic
+    // rather than like a smeared post-process.
+    this.renderingPipeline = new DefaultRenderingPipeline("carboyDepth", true, this.scene, [this.camera]);
+    this.renderingPipeline.fxaaEnabled = true;
+    this.renderingPipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
+    this.renderingPipeline.depthOfField.focalLength = 32;
+    this.renderingPipeline.depthOfField.fStop = 7;
+    this.renderingPipeline.depthOfField.lensSize = 34;
+    this.renderingPipeline.depthOfField.focusDistance = Math.hypot(TUNING.camera.height, TUNING.camera.distance);
+    this.renderingPipeline.depthOfFieldEnabled = true;
 
     window.addEventListener("resize", () => this.engine.resize());
   }
@@ -130,6 +146,10 @@ export class App {
       this.camTarget.x + jx,
       TUNING.camera.height * pull + jy,
       this.camTarget.z - TUNING.camera.distance * pull
+    );
+    this.renderingPipeline.depthOfField.focusDistance = Math.max(
+      38,
+      Math.hypot(this.camera.position.x - this.camTarget.x, this.camera.position.y, this.camera.position.z - this.camTarget.z)
     );
     this.camera.setTarget(new Vector3(this.camTarget.x + jx * 0.35, 0, this.camTarget.z));
   }

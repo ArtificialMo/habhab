@@ -186,9 +186,9 @@ export class Effects {
   sparkle(position: Vector3): void {
     const ps = this.next("sparkle");
     ps.emitter = position.clone();
-    ps.manualEmitCount = 16;
+    ps.manualEmitCount = 22;
     ps.start();
-    this.flash = Math.max(this.flash, 0.045);
+    this.flash = Math.max(this.flash, 0.06);
   }
 
   /** Water thrown up by a car crossing a puddle, plus an expanding ripple. */
