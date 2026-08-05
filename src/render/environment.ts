@@ -28,8 +28,10 @@ export class Environment {
   private readonly gulls: { node: TransformNode; radius: number; speed: number; phase: number; y: number }[] = [];
   private readonly clouds: { mesh: Mesh; speed: number }[] = [];
   private time = 0;
+  private readonly lowPower: boolean;
 
-  constructor(scene: Scene, world: Archipelago) {
+  constructor(scene: Scene, world: Archipelago, options: { lowPower?: boolean } = {}) {
+    this.lowPower = Boolean(options.lowPower);
     const R = TUNING.world.islandRadius;
 
     // ---- sea -------------------------------------------------------------
@@ -590,7 +592,7 @@ export class Environment {
     });
     const seeded = mulberry32(99);
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < (this.lowPower ? 5 : 10); i++) {
       const cloud = new Mesh(`cloud${i}`, scene);
       const puffs: Mesh[] = [];
       const puffCount = 3 + Math.floor(seeded() * 3);
@@ -613,9 +615,9 @@ export class Environment {
       this.clouds.push({ mesh: merged, speed: 0.5 + seeded() * 0.9 });
     }
 
-    this.buildSoftClouds(scene);
+    this.buildSoftClouds(scene, this.lowPower);
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < (this.lowPower ? 2 : 5); i++) {
       const node = new TransformNode(`gull${i}`, scene);
       for (const side of [-1, 1]) {
         const wing = MeshBuilder.CreateBox("wing", { width: 1.5, height: 0.09, depth: 0.42 }, scene);
@@ -637,7 +639,7 @@ export class Environment {
   }
 
   /** Large alpha-soft cloud cards sit high and wide, framing the playable island. */
-  private buildSoftClouds(scene: Scene): void {
+  private buildSoftClouds(scene: Scene, lowPower = false): void {
     const cloudTexture = softCloudTexture(scene);
     const cloudMat = new StandardMaterial("softCloudMat", scene);
     cloudMat.diffuseTexture = cloudTexture;
@@ -657,7 +659,8 @@ export class Environment {
       { x: -38, y: 17, z: 32, width: 24, height: 10, speed: 0.28 },
     ];
 
-    for (const [index, cloud] of framing.entries()) {
+    const visibleFraming = lowPower ? framing.slice(0, 3) : framing;
+    for (const [index, cloud] of visibleFraming.entries()) {
       const plane = MeshBuilder.CreatePlane(
         "softCloud" + index,
         { width: cloud.width, height: cloud.height },

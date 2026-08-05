@@ -95,7 +95,9 @@ for (const ev of ["pointerdown", "keydown"]) {
 
 const world = await PhysicsWorld.create(app.scene);
 const arena = new Arena(app.scene, world);
-const environment = new Environment(app.scene, arena.world);
+const touchDevice =
+  navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
+const environment = new Environment(app.scene, arena.world, { lowPower: touchDevice });
 const player = new Player(app.scene, world, new Vector3(0, 1.2, -4));
 const effects = new Effects(app.scene, frame);
 
@@ -110,8 +112,8 @@ const effects = new Effects(app.scene, frame);
 const grass = new Grass(app.scene, arena.radius, {
   regions: arena.world.islands.map((i) => ({ x: i.x, z: i.z, radius: i.radius })),
   fill: true,
-  patchCount: 150,
-  bladesPerPatch: 300,
+  patchCount: touchDevice ? 96 : 150,
+  bladesPerPatch: touchDevice ? 170 : 300,
   maxRadiusFactor: 0.97,
 });
 const influencers: GrassInfluencer[] = [];
@@ -173,6 +175,8 @@ const props = new Props(
 const tracked = new Map<number, { lastX: number; lastZ: number; sinceStamp: number; driftGap: number }>();
 
 const enemies: Enemy[] = [];
+const vehicles = [player.vehicle];
+const vehiclePositions: Vector3[] = [];
 const mobNames = new MobNameDealer();
 let spawnAngle = 0;
 
@@ -297,10 +301,12 @@ function frameUpdate(rawDt: number): void {
   }
 
   combat.tick(dt);
+  vehicles.length = 1;
+  for (const e of enemies) vehicles.push(e.vehicle);
   // Grip and drag are ground effects. Once a car is over the edge it should
   // plummet, but linear damping applies on every axis, so a heavily damped body
   // drifts down like a leaf — which drains all the drama out of a knockout.
-  for (const v of [player.vehicle, ...enemies.map((e) => e.vehicle)]) {
+  for (const v of vehicles) {
     const airborne = arena.marginAt(v.position.x, v.position.z) < -0.5 || v.position.y < -0.6;
     v.body.setLinearDamping(airborne ? 0 : v.config.linearDamping);
     if (!airborne) v.applyGrip(dt, v === player.vehicle ? TUNING.player.grip : TUNING.enemy.grip);
@@ -366,23 +372,21 @@ function frameUpdate(rawDt: number): void {
   // driving in a straight line, which read as damage rather than as tyres on stone.
   if (emitScuff) scuffT = 0.11;
 
-  influencers.length = 0;
-  const vehicles = [player.vehicle, ...enemies.map((e) => e.vehicle)];
-  zones.refresh(
-    vehicles.map((v) => v.position),
-    dt,
-    3
-  );
+  vehiclePositions.length = 0;
+  for (const v of vehicles) vehiclePositions.push(v.position);
+  zones.refresh(vehiclePositions, dt, 3);
 
-  for (const v of vehicles) {
+  influencers.length = vehicles.length;
+  for (let vehicleIndex = 0; vehicleIndex < vehicles.length; vehicleIndex++) {
+    const v = vehicles[vehicleIndex];
     const grounded = v.position.y < 1.6;
-    influencers.push({
-      x: v.position.x,
-      z: v.position.z,
-      // A car that has left the deck stops flattening grass.
-      radius: grounded ? Math.max(v.config.size.w, v.config.size.l) * 0.78 : 0,
-      strength: 0.42 + Math.min(0.45, v.planarSpeed * 0.03),
-    });
+    const influencer = influencers[vehicleIndex] ?? { x: 0, z: 0, radius: 0, strength: 0 };
+    influencer.x = v.position.x;
+    influencer.z = v.position.z;
+    // A car that has left the deck stops flattening grass.
+    influencer.radius = grounded ? Math.max(v.config.size.w, v.config.size.l) * 0.78 : 0;
+    influencer.strength = 0.42 + Math.min(0.45, v.planarSpeed * 0.03);
+    influencers[vehicleIndex] = influencer;
     if (!grounded) continue;
 
     // Distance-based stamping, so marks are evenly spaced along the path rather

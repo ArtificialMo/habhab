@@ -29,14 +29,14 @@ export class SpeedLines {
   constructor(frame: HTMLElement) {
     this.el = document.createElement("div");
     this.el.style.cssText = `position:absolute;left:50%;top:50%;
-      width:260vmax;height:260vmax;
+      width:220%;height:220%;
       transform:translate(-50%,-50%);transform-origin:50% 50%;
       pointer-events:none;z-index:3;opacity:0;
        background:repeating-conic-gradient(from -2deg at 50% 50%,
-         rgba(255,255,255,1) 0deg 2.2deg, rgba(255,255,255,0) 2.2deg 22deg);
+         rgba(255,255,255,.95) 0deg 3.6deg, rgba(255,255,255,0) 3.6deg 28deg);
        -webkit-mask-image:radial-gradient(circle at 50% 50%, transparent 4%, #000 12%);
        mask-image:radial-gradient(circle at 50% 50%, transparent 4%, #000 12%);
-       filter:drop-shadow(0 0 10px rgba(255,255,255,.7)) brightness(1.25);
+       filter:none;
       transition:opacity .1s linear;will-change:opacity,transform;`;
     frame.appendChild(this.el);
   }

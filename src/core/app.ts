@@ -28,6 +28,7 @@ export class App {
 
   private readonly camTarget = new Vector3(0, 0, 0);
   private readonly lead = new Vector3(0, 0, 0);
+  private readonly cameraLook = new Vector3(0, 0, 0);
   private readonly renderingPipeline: DefaultRenderingPipeline;
 
   private shake = 0;
@@ -39,13 +40,17 @@ export class App {
   private impactSlowScale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
+    const sharedArtifact = Boolean((globalThis as { __CARBOY_SHARE__?: boolean }).__CARBOY_SHARE__);
+    const touchDevice =
+      navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
     this.engine = new Engine(
       canvas,
       true,
-      { preserveDrawingBuffer: true, stencil: true, alpha: true },
+      { preserveDrawingBuffer: !sharedArtifact, stencil: true, alpha: true },
       true
     );
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
+    const maxPixelRatio = touchDevice ? 1.25 : 2;
+    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, maxPixelRatio));
 
     this.scene = new Scene(this.engine);
     // Cleared transparent so the CSS sky gradient behind the canvas shows through.
@@ -72,7 +77,7 @@ export class App {
     // A failed HDR post-process leaves the transparent canvas visible but drops the
     // entire 3D scene behind it, which is much worse than a softer image.
     this.renderingPipeline = new DefaultRenderingPipeline("carboyDepth", false, this.scene, [this.camera]);
-    this.renderingPipeline.fxaaEnabled = true;
+    this.renderingPipeline.fxaaEnabled = !touchDevice;
     this.renderingPipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
     this.renderingPipeline.depthOfField.focalLength = 32;
     this.renderingPipeline.depthOfField.fStop = 7;
@@ -80,7 +85,8 @@ export class App {
     this.renderingPipeline.depthOfField.focusDistance = Math.hypot(TUNING.camera.height, TUNING.camera.distance);
     // Depth of field needs a depth texture. Keep the authored focus cue where the
     // browser supports it, while leaving the base scene fully renderable elsewhere.
-    this.renderingPipeline.depthOfFieldEnabled = this.engine.getCaps().depthTextureExtension;
+    this.renderingPipeline.depthOfFieldEnabled =
+      !touchDevice && this.engine.getCaps().depthTextureExtension;
 
     window.addEventListener("resize", () => this.engine.resize());
   }
@@ -164,7 +170,8 @@ export class App {
       38,
       Math.hypot(this.camera.position.x - this.camTarget.x, this.camera.position.y, this.camera.position.z - this.camTarget.z)
     );
-    this.camera.setTarget(new Vector3(this.camTarget.x + jx * 0.35, 0, this.camTarget.z));
+    this.cameraLook.set(this.camTarget.x + jx * 0.35, 0, this.camTarget.z);
+    this.camera.setTarget(this.cameraLook);
   }
 
   /** §2.8 — every hit moves the screen. `strength` is the Δv delivered. */

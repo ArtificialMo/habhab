@@ -21,6 +21,7 @@ const css = cssName ? readFileSync(join(dist, cssName), "utf8") : "";
 const audioFiles = {
   coin: "coin-drop.ogg",
   impact: "metal-impact.ogg",
+  engine: "engine-loop.ogg",
 };
 const audio = Object.fromEntries(
   Object.entries(audioFiles).map(([id, filename]) => {

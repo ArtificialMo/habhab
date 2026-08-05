@@ -13,6 +13,11 @@ tones. They are loaded by `src/audio/audio.ts` after the first user gesture.
   Source: https://commons.wikimedia.org/wiki/File:Metal_Clanging_Noises.ogg
   License: CC BY-SA 4.0.
 
+- engine-loop.ogg - "MAC3.OGG", a recorded V8 engine clip by Mustangworld. It is
+  layered quietly under the responsive synthetic engine bed.
+  Source: https://commons.wikimedia.org/wiki/File:MAC3.OGG
+  License: CC BY-SA 3.0.
+
 The files are redistributed unchanged under their source licenses. Attribution is
 kept here with the shipped assets so the production site carries the credit with the
 runtime files.

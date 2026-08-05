@@ -8,7 +8,7 @@ import { TUNING } from "../data/tuning";
  * Browsers will not start an AudioContext without a gesture, so this stays dormant
  * until the first touch and is silent, not broken, before then.
  */
-type SampleId = "coin" | "impact";
+type SampleId = "coin" | "impact" | "engine";
 
 type AudioGlobals = {
   __CARBOY_AUDIO__?: Partial<Record<SampleId, string>>;
@@ -17,6 +17,7 @@ type AudioGlobals = {
 const SAMPLE_URLS: Record<SampleId, string> = {
   coin: "/audio/coin-drop.ogg",
   impact: "/audio/metal-impact.ogg",
+  engine: "/audio/engine-loop.ogg",
 };
 
 export class Audio {
@@ -37,6 +38,13 @@ export class Audio {
   private engineOsc: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
   private engineFilter: BiquadFilterNode | null = null;
+  private engineSampleSource: AudioBufferSourceNode | null = null;
+  private engineSampleGain: GainNode | null = null;
+  private engineSampleFilter: BiquadFilterNode | null = null;
+  private engineLevel = 0;
+  private engineSampleLevel = 0;
+  private engineLastR = -1;
+  private engineLastUpdateAt = -Infinity;
 
   muted = false;
 
@@ -44,8 +52,10 @@ export class Audio {
     this.muted = muted;
     if (!this.ctx) return;
     const now = this.t;
-    this.engineGain?.gain.setTargetAtTime(muted ? 0 : 0, now, 0.02);
+    this.engineGain?.gain.setTargetAtTime(muted ? 0 : this.engineLevel, now, 0.02);
+    this.engineSampleGain?.gain.setTargetAtTime(muted ? 0 : this.engineSampleLevel, now, 0.02);
     this.chargeGain?.gain.setTargetAtTime(muted ? 0 : 0.0001, now, 0.02);
+    this.engineLastR = -1;
   }
 
   pause(): void {
@@ -53,11 +63,16 @@ export class Audio {
     if (!this.ctx) return;
     const now = this.t;
     this.engineGain?.gain.setTargetAtTime(0, now, 0.02);
+    this.engineSampleGain?.gain.setTargetAtTime(0, now, 0.02);
     this.chargeGain?.gain.setTargetAtTime(0, now, 0.02);
   }
 
   resume(): void {
     this.music.resume();
+    if (!this.ctx) return;
+    const now = this.t;
+    this.engineGain?.gain.setTargetAtTime(this.muted ? 0 : this.engineLevel, now, 0.02);
+    this.engineSampleGain?.gain.setTargetAtTime(this.muted ? 0 : this.engineSampleLevel, now, 0.02);
   }
 
   /** Call from a user gesture. Safe to call repeatedly. */
@@ -97,6 +112,7 @@ export class Audio {
           if (!response.ok) continue;
           const bytes = await response.arrayBuffer();
           this.samples.set(id, await ctx.decodeAudioData(bytes));
+          if (id === "engine") this.startEngineSample();
         } catch {
           // The procedural layer is a deliberate offline fallback.
         }
@@ -153,14 +169,46 @@ export class Audio {
     this.engineOsc.start();
   }
 
+  private startEngineSample(): void {
+    if (!this.ctx || !this.master || this.engineSampleSource) return;
+    const buffer = this.samples.get("engine");
+    if (!buffer) return;
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 520;
+    filter.Q.value = 0.7;
+
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(filter).connect(gain).connect(this.master);
+    source.start();
+
+    this.engineSampleSource = source;
+    this.engineSampleFilter = filter;
+    this.engineSampleGain = gain;
+  }
+
   /** Idle rumble that rises with speed. Kept quiet — it is a bed, not an event. */
   engine(speed: number, maxSpeed: number): void {
     if (!this.ctx || !this.engineGain || !this.engineOsc || !this.engineFilter) return;
     const r = Math.min(1, speed / maxSpeed);
     const now = this.t;
-    this.engineGain.gain.setTargetAtTime(this.muted ? 0 : 0.028 + r * 0.05, now, 0.12);
+    if (now - this.engineLastUpdateAt < 1 / 30 && Math.abs(r - this.engineLastR) < 0.02) return;
+    this.engineLastUpdateAt = now;
+    this.engineLastR = r;
+    this.engineLevel = this.muted ? 0 : 0.028 + r * 0.05;
+    this.engineSampleLevel = this.muted ? 0 : 0.012 + r * 0.038;
+    this.engineGain.gain.setTargetAtTime(this.engineLevel, now, 0.12);
     this.engineOsc.frequency.setTargetAtTime(40 + r * 58, now, 0.1);
     this.engineFilter.frequency.setTargetAtTime(200 + r * 620, now, 0.1);
+    this.engineSampleGain?.gain.setTargetAtTime(this.engineSampleLevel, now, 0.14);
+    this.engineSampleFilter?.frequency.setTargetAtTime(360 + r * 960, now, 0.12);
+    this.engineSampleSource?.playbackRate.setTargetAtTime(0.78 + r * 0.45, now, 0.12);
   }
 
   /**
