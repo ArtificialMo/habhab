@@ -1,21 +1,38 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+
+const artifactGzip = gzipSync(readFileSync("dist/carboy-artifact.html"), { level: 9 }).toString("base64");
 
 mkdirSync("dist/server", { recursive: true });
 writeFileSync(
   "dist/server/index.js",
-  `export default {
+  `const CARBOY_HTML_GZIP_B64 = ${JSON.stringify(artifactGzip)};
+
+function decodeBase64(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function artifactResponse() {
+  const compressed = new Response(decodeBase64(CARBOY_HTML_GZIP_B64)).body;
+  const body = compressed.pipeThrough(new DecompressionStream("gzip"));
+  return new Response(body, {
+    headers: {
+      "cache-control": "no-cache",
+      "content-type": "text/html; charset=utf-8",
+    },
+  });
+}
+
+export default {
   async fetch(request, env) {
-    if (env?.ASSETS) {
-      // Sites exposes the built files through ASSETS, but its root request does
-      // not always apply the static index fallback. The self-contained artifact
-      // is the canonical share build, so route both entry URLs to it explicitly.
-      const url = new URL(request.url);
-      if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
-        url.pathname = "/carboy-artifact.html";
-        return env.ASSETS.fetch(new Request(url, request));
-      }
-      return env.ASSETS.fetch(request);
+    const url = new URL(request.url);
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      return artifactResponse();
     }
+    if (env?.ASSETS) return env.ASSETS.fetch(request);
     return new Response("Carboy assets are unavailable", {
       status: 503,
       headers: { "content-type": "text/plain; charset=utf-8" },
