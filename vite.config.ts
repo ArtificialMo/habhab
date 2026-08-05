@@ -7,5 +7,10 @@ export default defineConfig({
   // Havok ships a hand-rolled ESM wrapper around its wasm; pre-bundling it breaks
   // the `locateFile` override we use in src/core/physics.ts.
   optimizeDeps: { exclude: ["@babylonjs/havok"] },
-  build: { target: "es2022" },
+  build: {
+    target: "es2022",
+    // The Sites asset binding is unreliable for secondary chunks, so the
+    // share artifact must contain Babylon's dynamic shader modules too.
+    rollupOptions: { output: { inlineDynamicImports: true } },
+  },
 });
