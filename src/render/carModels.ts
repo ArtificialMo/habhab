@@ -347,7 +347,7 @@ export function buildCar(scene: Scene, style: CarStyle, name: string): CarParts 
   // enough to read as whippy without any real cost.
   const antenna: TransformNode[] = [];
   if (style.antenna) {
-    const segLen = 0.22;
+    const segLen = 0.44;
     let parent: TransformNode = body;
     let baseY = H * 0.95;
     for (let i = 0; i < 3; i++) {
@@ -356,7 +356,7 @@ export function buildCar(scene: Scene, style: CarStyle, name: string): CarParts 
       seg.position.set(0, i === 0 ? baseY : segLen, i === 0 ? -L * 0.3 : 0);
       const rod = MeshBuilder.CreateCylinder(
         `${name}-rod`,
-        { diameter: 0.05, height: segLen, tessellation: 5 },
+        { diameter: 0.1, height: segLen, tessellation: 5 },
         scene
       );
       rod.position.y = segLen * 0.5;
@@ -367,6 +367,7 @@ export function buildCar(scene: Scene, style: CarStyle, name: string): CarParts 
     }
     const ball = MeshBuilder.CreateSphere(`${name}-antball`, { segments: 5, diameter: 0.15 }, scene);
     ball.position.y = segLen;
+    ball.scaling.setAll(2);
     attach(ball, antenna[antenna.length - 1], mat("antball", PALETTE.playerYellow), 0.02);
   }
 

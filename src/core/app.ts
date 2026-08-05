@@ -35,6 +35,8 @@ export class App {
   private readonly shakeDir = { x: 1, z: 0.6 };
   private zoom = 0;
   private hitStop = 0;
+  private impactSlow = 0;
+  private impactSlowScale = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.engine = new Engine(
@@ -84,9 +86,15 @@ export class App {
    * impact feel like it had mass rather than like a position change.
    */
   consumeTimeScale(dt: number): number {
-    if (this.hitStop <= 0) return 1;
-    this.hitStop = Math.max(0, this.hitStop - dt);
-    return 0.06;
+    this.impactSlow = Math.max(0, this.impactSlow - dt);
+    if (this.impactSlow <= 0) this.impactSlowScale = 1;
+
+    let scale = this.impactSlow > 0 ? this.impactSlowScale : 1;
+    if (this.hitStop > 0) {
+      this.hitStop = Math.max(0, this.hitStop - dt);
+      scale = Math.min(scale, 0.06);
+    }
+    return scale;
   }
 
   /**
@@ -172,6 +180,14 @@ export class App {
       this.hitStop = Math.max(this.hitStop, Math.min(c.hitStopMax, strength * c.hitStopPerDeltaV));
     }
     this.zoom = Math.min(c.zoomMax, this.zoom + strength * c.zoomPerDeltaV);
+  }
+
+  /** A rear hit gets a readable, cinematic time pull in addition to ordinary hit-stop. */
+  triggerRearHit(): void {
+    const c = TUNING.camera;
+    this.impactSlow = Math.max(this.impactSlow, c.rearHitSlowDuration);
+    this.impactSlowScale = Math.min(this.impactSlowScale, c.rearHitSlowScale);
+    this.zoom = Math.min(c.zoomMax, Math.max(this.zoom, c.rearHitZoom));
   }
 
   /** Continuous low-level tremble, used while a charge winds up. */

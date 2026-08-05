@@ -32,10 +32,11 @@ export class SpeedLines {
       width:260vmax;height:260vmax;
       transform:translate(-50%,-50%);transform-origin:50% 50%;
       pointer-events:none;z-index:3;opacity:0;
-      background:repeating-conic-gradient(from 0deg at 50% 50%,
-        rgba(255,255,255,.92) 0deg .45deg, rgba(255,255,255,0) .45deg 1.9deg);
-      -webkit-mask-image:radial-gradient(circle at 50% 50%, transparent 3%, #000 11%);
-      mask-image:radial-gradient(circle at 50% 50%, transparent 3%, #000 11%);
+       background:repeating-conic-gradient(from -2deg at 50% 50%,
+         rgba(255,255,255,.96) 0deg 1.25deg, rgba(255,255,255,0) 1.25deg 15deg);
+       -webkit-mask-image:radial-gradient(circle at 50% 50%, transparent 4%, #000 12%);
+       mask-image:radial-gradient(circle at 50% 50%, transparent 4%, #000 12%);
+       filter:drop-shadow(0 0 5px rgba(255,255,255,.32));
       transition:opacity .1s linear;will-change:opacity,transform;`;
     frame.appendChild(this.el);
   }
@@ -46,9 +47,9 @@ export class SpeedLines {
       this.el.style.opacity = "0";
       return;
     }
-    this.el.style.opacity = String(Math.min(0.7, intensity * 0.78));
-    const spin = time * 22;
-    const scale = 1 + Math.sin(time * 9) * 0.015;
+    this.el.style.opacity = String(Math.min(0.82, intensity * 0.92));
+    const spin = time * 54 + Math.sin(time * 2.2) * 8;
+    const scale = 1.04 + Math.sin(time * 12.5) * 0.075 + Math.sin(time * 5.1) * 0.025;
     // Centring stays in the transform, so rotation pivots on the frame centre.
     this.el.style.transform = `translate(-50%,-50%) rotate(${spin}deg) scale(${scale})`;
   }

@@ -179,6 +179,10 @@ overlay.onMassChanged = (who, mass) => {
 const combat = new Combat(world, player, (hit) => {
   overlay.lastHit = combat.lastReport;
   app.addImpact(hit.strength);
+  if (hit.rear) {
+    app.triggerRearHit();
+    effects.slowMotion(TUNING.camera.rearHitSlowDuration, TUNING.camera.rearHitSlowScale);
+  }
   effects.impact(hit.point, hit.strength, hit.rear, hit.normal);
   // A hit up the back detonates. Lifted off the deck so the fireball reads as
   // coming out of the car rather than out of the ground under it.

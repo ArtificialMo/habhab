@@ -168,6 +168,12 @@ export interface Tuning {
     zoomPerDeltaV: number;
     zoomMax: number;
     zoomRecover: number;
+    /** Wall-clock duration of the rear-hit slow-motion beat. */
+    rearHitSlowDuration: number;
+    /** Gameplay and VFX time scale during the rear-hit beat. */
+    rearHitSlowScale: number;
+    /** Extra FOV pull reserved for a rear hit. */
+    rearHitZoom: number;
     /** Camera drift toward the player's heading, so you see where you are going. */
     lead: number;
   };
@@ -372,8 +378,11 @@ export const TUNING: Tuning = {
     hitStopPerDeltaV: 0.0028,
     hitStopMax: 0.085,
     zoomPerDeltaV: 0.0022,
-    zoomMax: 0.06,
+    zoomMax: 0.14,
     zoomRecover: 3.5,
+    rearHitSlowDuration: 0.72,
+    rearHitSlowScale: 0.24,
+    rearHitZoom: 0.12,
     lead: 2.6,
   },
 

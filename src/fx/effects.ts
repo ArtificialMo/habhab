@@ -38,6 +38,9 @@ export class Effects {
   private rayLife = 0;
   private rayStrength = 0;
   private usedWords = new Set<string>();
+  private readonly particleBaseSpeeds = new Map<EffectId, number>();
+  private particleSlowT = 0;
+  private particleTimeScale = 1;
 
   constructor(
     private readonly scene: Scene,
@@ -98,6 +101,7 @@ export class Effects {
     }
     this.systems.set(id, arr);
     this.cursors.set(id, 0);
+    if (arr[0]) this.particleBaseSpeeds.set(id, arr[0].updateSpeed);
   }
 
   private next(id: EffectId): ParticleSystem {
@@ -144,6 +148,21 @@ export class Effects {
     }
 
     if (medium || rear) this.word(position, strength, rear, normal);
+  }
+
+  /** Slows pooled particles without changing their launch impulse or trajectory. */
+  slowMotion(duration: number, scale: number): void {
+    this.particleSlowT = Math.max(this.particleSlowT, duration);
+    this.particleTimeScale = Math.min(this.particleTimeScale, scale);
+    this.applyParticleTimeScale();
+  }
+
+  private applyParticleTimeScale(): void {
+    for (const [id, systems] of this.systems) {
+      const base = this.particleBaseSpeeds.get(id);
+      if (base === undefined) continue;
+      for (const system of systems) system.updateSpeed = base * this.particleTimeScale;
+    }
   }
 
   /** Dust kicked up by a car sliding sideways or being shoved across the deck. */
@@ -261,15 +280,23 @@ export class Effects {
   }
 
   update(dt: number): void {
-    this.time += dt;
-    for (const w of this.words) w.update(dt);
-    for (const r of this.rings) r.update(dt);
+    if (this.particleSlowT > 0) {
+      this.particleSlowT = Math.max(0, this.particleSlowT - dt);
+      if (this.particleSlowT === 0) {
+        this.particleTimeScale = 1;
+        this.applyParticleTimeScale();
+      }
+    }
+    const effectDt = dt * this.particleTimeScale;
+    this.time += effectDt;
+    for (const w of this.words) w.update(effectDt);
+    for (const r of this.rings) r.update(effectDt);
     if (this.flash > 0) {
-      this.flash = Math.max(0, this.flash - TUNING.vfx.screenFlashDecay * dt);
+      this.flash = Math.max(0, this.flash - TUNING.vfx.screenFlashDecay * effectDt);
       this.flashEl.style.opacity = String(this.flash);
     }
     if (this.rayLife > 0) {
-      this.rayLife = Math.max(0, this.rayLife - dt);
+      this.rayLife = Math.max(0, this.rayLife - effectDt);
       const t = 1 - this.rayLife / 0.34;
       const eased = 1 - Math.pow(1 - Math.min(1, t * 1.4), 3);
       const opacity = (1 - t) * (0.48 + this.rayStrength * 0.52);
