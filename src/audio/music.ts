@@ -7,6 +7,10 @@ const DAY_TRACKS = [
   "/audio/music/day-5.mp3",
 ];
 
+type MusicGlobals = {
+  __CARBOY_MUSIC__?: Partial<Record<string, string>>;
+};
+
 type MusicMode = "intro" | "day" | null;
 
 /**
@@ -120,7 +124,8 @@ export class Music {
     this.currentKey = key;
 
     const element = document.createElement("audio");
-    element.src = url;
+    const inline = (globalThis as MusicGlobals).__CARBOY_MUSIC__;
+    element.src = inline?.[url] ?? url;
     element.preload = "auto";
     element.volume = this.volume;
     element.muted = this.muted;

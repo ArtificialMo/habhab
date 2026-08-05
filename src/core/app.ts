@@ -29,7 +29,7 @@ export class App {
   private readonly camTarget = new Vector3(0, 0, 0);
   private readonly lead = new Vector3(0, 0, 0);
   private readonly cameraLook = new Vector3(0, 0, 0);
-  private readonly renderingPipeline: DefaultRenderingPipeline;
+  private readonly renderingPipeline: DefaultRenderingPipeline | null;
 
   private shake = 0;
   private shakePhase = 0;
@@ -55,7 +55,9 @@ export class App {
     this.scene = new Scene(this.engine);
     // Cleared transparent so the CSS sky gradient behind the canvas shows through.
     // A flat clear colour was reading as coloured paper behind the island.
-    this.scene.clearColor = new Color4(0, 0, 0, 0);
+    this.scene.clearColor = sharedArtifact
+      ? new Color4(0.12, 0.42, 0.78, 1)
+      : new Color4(0, 0, 0, 0);
     this.scene.ambientColor = new Color3(0.5, 0.5, 0.55);
     // The cel shader lights itself from a fixed sun; this only serves the few
     // StandardMaterials left (foam, rings, comic text).
@@ -76,17 +78,19 @@ export class App {
     // HDR render targets are not reliable on every embedded/mobile WebGL surface.
     // A failed HDR post-process leaves the transparent canvas visible but drops the
     // entire 3D scene behind it, which is much worse than a softer image.
-    this.renderingPipeline = new DefaultRenderingPipeline("carboyDepth", false, this.scene, [this.camera]);
-    this.renderingPipeline.fxaaEnabled = !touchDevice;
-    this.renderingPipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
-    this.renderingPipeline.depthOfField.focalLength = 32;
-    this.renderingPipeline.depthOfField.fStop = 7;
-    this.renderingPipeline.depthOfField.lensSize = 34;
-    this.renderingPipeline.depthOfField.focusDistance = Math.hypot(TUNING.camera.height, TUNING.camera.distance);
-    // Depth of field needs a depth texture. Keep the authored focus cue where the
-    // browser supports it, while leaving the base scene fully renderable elsewhere.
-    this.renderingPipeline.depthOfFieldEnabled =
-      !touchDevice && this.engine.getCaps().depthTextureExtension;
+    if (!sharedArtifact && !touchDevice) {
+      const pipeline = new DefaultRenderingPipeline("carboyDepth", false, this.scene, [this.camera]);
+      pipeline.fxaaEnabled = true;
+      pipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
+      pipeline.depthOfField.focalLength = 32;
+      pipeline.depthOfField.fStop = 7;
+      pipeline.depthOfField.lensSize = 34;
+      pipeline.depthOfField.focusDistance = Math.hypot(TUNING.camera.height, TUNING.camera.distance);
+      pipeline.depthOfFieldEnabled = this.engine.getCaps().depthTextureExtension;
+      this.renderingPipeline = pipeline;
+    } else {
+      this.renderingPipeline = null;
+    }
 
     window.addEventListener("resize", () => this.engine.resize());
   }
@@ -166,10 +170,12 @@ export class App {
       TUNING.camera.height * pull + jy,
       this.camTarget.z - TUNING.camera.distance * pull
     );
-    this.renderingPipeline.depthOfField.focusDistance = Math.max(
-      38,
-      Math.hypot(this.camera.position.x - this.camTarget.x, this.camera.position.y, this.camera.position.z - this.camTarget.z)
-    );
+    if (this.renderingPipeline) {
+      this.renderingPipeline.depthOfField.focusDistance = Math.max(
+        38,
+        Math.hypot(this.camera.position.x - this.camTarget.x, this.camera.position.y, this.camera.position.z - this.camTarget.z)
+      );
+    }
     this.cameraLook.set(this.camTarget.x + jx * 0.35, 0, this.camTarget.z);
     this.camera.setTarget(this.cameraLook);
   }

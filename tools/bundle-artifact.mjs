@@ -30,6 +30,22 @@ const audio = Object.fromEntries(
   })
 );
 const audioJson = JSON.stringify(audio);
+const musicFiles = {
+  "/audio/music/intro-1.mp3": "music/intro-1.mp3",
+  "/audio/music/intro-2.mp3": "music/intro-2.mp3",
+  "/audio/music/day-1.mp3": "music/day-1.mp3",
+  "/audio/music/day-2.mp3": "music/day-2.mp3",
+  "/audio/music/day-3.mp3": "music/day-3.mp3",
+  "/audio/music/day-4.mp3": "music/day-4.mp3",
+  "/audio/music/day-5.mp3": "music/day-5.mp3",
+};
+const music = Object.fromEntries(
+  Object.entries(musicFiles).map(([url, filename]) => {
+    const bytes = readFileSync(join("dist", "audio", filename));
+    return [url, "data:audio/mpeg;base64," + bytes.toString("base64")];
+  })
+);
+const musicJson = JSON.stringify(music);
 
 // The shell mirrors index.html: a portrait 9:16 stage, letterboxed on wide screens.
 const html = `<style>
@@ -69,6 +85,7 @@ const html = `<style>
   for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   globalThis.__CARBOY_WASM__ = bytes.buffer;
   globalThis.__CARBOY_AUDIO__ = ${audioJson};
+  globalThis.__CARBOY_MUSIC__ = ${musicJson};
   // Shared build: no developer overlay, no tuning panel.
   globalThis.__CARBOY_SHARE__ = true;
 })();
