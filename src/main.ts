@@ -292,12 +292,18 @@ function beginCountdown(): void {
   audio.unlock();
   audio.music.playIntro();
   setPlayerVisible(true);
-  countdownValue = 3;
-  countdownClock = 0.82;
-  banners.show("3", "#ffd23f", 0.82);
+  queueStageCountdown();
 }
 
-function startDay(): void {
+function queueStageCountdown(): void {
+  if (countdownValue > 0) return;
+  setPlayerVisible(true);
+  countdownValue = 3;
+  countdownClock = 0.82;
+  banners.showCountdown("3", "#ffffff", 0.82);
+}
+
+function startStage(): void {
   playStarted = true;
   countdownValue = 0;
   countdownClock = 0;
@@ -320,6 +326,7 @@ function frameUpdate(rawDt: number): void {
     onboarding.setHidden(true);
     environment.update(rawDt);
     app.updateCamera(player.vehicle.position, player.vehicle.forward, rawDt);
+    banners.update(rawDt);
     controls.endFrame();
     return;
   }
@@ -327,12 +334,12 @@ function frameUpdate(rawDt: number): void {
     countdownClock -= rawDt;
     if (countdownClock <= 0) {
       if (countdownValue > 1) {
-        countdownValue -= 1;
-        countdownClock = 0.82;
-        banners.show(String(countdownValue), "#ffd23f", 0.82);
-      } else {
-        startDay();
-      }
+          countdownValue -= 1;
+          countdownClock = 0.82;
+          banners.showCountdown(String(countdownValue), "#ffffff", 0.82);
+        } else {
+          startStage();
+        }
     }
     controls.steerAmount = 0;
     controls.charging = false;
@@ -340,6 +347,7 @@ function frameUpdate(rawDt: number): void {
     onboarding.setHidden(true);
     environment.update(rawDt);
     app.updateCamera(player.vehicle.position, player.vehicle.forward, rawDt);
+    banners.update(rawDt);
     controls.endFrame();
     return;
   }
@@ -737,8 +745,7 @@ async function endOfDay(): Promise<void> {
   dayCoinsStart = pickups.collected;
   respawnT = 0.8;
   dayPaused = false;
-  audio.music.playDay(progress.day);
-  banners.show(`DAY ${progress.day}`, "#7fe0a0", 1.6);
+  queueStageCountdown();
 }
 
 gameReady = true;

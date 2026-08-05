@@ -41,7 +41,10 @@ export class Music {
 
   playIntro(): void {
     this.mode = "intro";
-    if (this.current && this.currentKey.startsWith("intro:")) return;
+    if (this.current && this.currentKey.startsWith("intro:")) {
+      this.playCurrent();
+      return;
+    }
     this.startIntro(this.introIndex);
   }
 
@@ -49,7 +52,10 @@ export class Music {
     const index = Math.max(0, Math.min(DAY_TRACKS.length - 1, day - 1));
     this.mode = "day";
     this.dayIndex = index;
-    if (this.current && this.currentKey === "day:" + index) return;
+    if (this.current && this.currentKey === "day:" + index) {
+      this.playCurrent();
+      return;
+    }
     this.startDay(index);
   }
 
@@ -74,7 +80,7 @@ export class Music {
 
   resume(): void {
     this.paused = false;
-    if (this.current) void this.current.play().catch(() => undefined);
+    if (this.current) this.playCurrent();
     else if (this.mode === "intro") this.startIntro(this.introIndex);
     else if (this.mode === "day") this.startDay(this.dayIndex);
   }
@@ -113,13 +119,20 @@ export class Music {
     );
   }
 
+  private playCurrent(): void {
+    const element = this.current;
+    if (!element || this.paused) return;
+    void element.play().catch(() => undefined);
+  }
+
   private startTrack(url: string, key: string, onEnded: () => void): void {
     if (this.currentKey === key && this.current) {
-      if (!this.paused && this.current.paused) void this.current.play().catch(() => undefined);
+      this.playCurrent();
       return;
     }
 
     this.current?.pause();
+    this.current?.remove();
     this.current = null;
     this.currentKey = key;
 
@@ -127,10 +140,15 @@ export class Music {
     const inline = (globalThis as MusicGlobals).__CARBOY_MUSIC__;
     element.src = inline?.[url] ?? url;
     element.preload = "auto";
+    element.setAttribute("playsinline", "");
+    element.setAttribute("aria-hidden", "true");
     element.volume = this.volume;
     element.muted = this.muted;
     element.onended = onEnded;
+    element.style.display = "none";
+    document.body.appendChild(element);
     this.current = element;
-    if (!this.paused) void element.play().catch(() => undefined);
+    element.load();
+    this.playCurrent();
   }
 }

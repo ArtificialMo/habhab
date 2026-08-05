@@ -1,4 +1,4 @@
-import { displayType, UI_FONT } from "./theme";
+import { displayType, slateStyle, UI_FONT } from "./theme";
 /**
  * Title card: CAR BOY / trouble in paradise.
  *
@@ -23,7 +23,7 @@ export class TitleScreen {
       flex-direction:column;align-items:center;justify-content:center;gap:4px;
       justify-content:center;padding-bottom:6%;
       background:linear-gradient(180deg, rgba(4,10,26,.78), rgba(4,10,26,.32) 42%, rgba(4,10,26,.72));
-      -webkit-user-select:none;user-select:none;cursor:pointer;
+      -webkit-user-select:none;user-select:none;cursor:default;
       font-family:${UI_FONT};`;
 
     const title = document.createElement("div");
@@ -51,21 +51,37 @@ export class TitleScreen {
     sub.style.cssText = `margin-top:26px;font:800 17px/1 ${UI_FONT};letter-spacing:.24em;color:#cfe6ff;
       text-shadow:0 2px 8px rgba(0,0,0,.8);font-style:italic;`;
 
-    const prompt = document.createElement("div");
-    prompt.textContent = "TAP TO START";
-    prompt.style.cssText = `margin-top:44px;font:900 14px/1 ${UI_FONT};letter-spacing:.3em;color:#ffd23f;
-      animation:carboyPulse 1.5s ease-in-out infinite;`;
+    const startButton = document.createElement("button");
+    startButton.type = "button";
+    startButton.className = "carboyStartButton";
+    startButton.textContent = "START DAY 1";
+    startButton.setAttribute("aria-label", "Start Day 1");
+    startButton.style.cssText = `width:min(78vw,300px);min-height:82px;margin-top:42px;
+      padding:18px 24px 16px;box-sizing:border-box;appearance:none;cursor:pointer;
+      touch-action:manipulation;${displayType(22)}letter-spacing:.08em;
+      ${slateStyle(10)}
+      text-shadow:0 2px 0 rgba(255,255,255,.8);transition:transform .08s ease,box-shadow .08s ease;`;
 
     const style = document.createElement("style");
-    style.textContent = `@keyframes carboyPulse{0%,100%{opacity:.35}50%{opacity:1}}`;
+    style.textContent = `@keyframes carboyPulse{0%,100%{opacity:.35}50%{opacity:1}}
+      .carboyStartButton:active{
+        transform:translateY(8px);
+        box-shadow:0 1px 0 #a7b0c0,0 2px 0 #8d97a8,0 4px 10px rgba(4,10,26,.5),inset 0 2px 0 rgba(255,255,255,.95);
+      }`;
     document.head.appendChild(style);
 
-    this.root.append(title, sub, prompt);
+    this.root.append(title, sub, startButton);
     frame.appendChild(this.root);
 
-    const start = () => this.dismiss();
-    this.root.addEventListener("pointerdown", start);
-    window.addEventListener("keydown", start, { once: true });
+    const start = (event: Event) => {
+      event.preventDefault();
+      this.dismiss();
+    };
+    startButton.addEventListener("pointerdown", start, { passive: false });
+    startButton.addEventListener("click", start);
+    startButton.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") start(event);
+    });
   }
 
   get open(): boolean {
