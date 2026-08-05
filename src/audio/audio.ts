@@ -392,7 +392,7 @@ export class Audio {
 
     const startAt = this.t;
     const bus = ctx.createGain();
-    bus.gain.setValueAtTime(0.78, startAt);
+    bus.gain.setValueAtTime(0.42, startAt);
     bus.connect(master);
     const ratios = [1.2, 1.48, 2.08];
     for (let i = 0; i < ratios.length; i++) {

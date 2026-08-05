@@ -43,7 +43,7 @@ const banners = new Banners(frame);
 const upgradeScreen = new UpgradeScreen(frame);
 // A card press kicks the camera, so the slate feels struck rather than clicked.
 upgradeScreen.onShake = (amount) => app.addImpact(14 * amount);
-const titleScreen = new TitleScreen(frame);
+const titleScreen = new TitleScreen(frame, () => beginCountdown());
 const progress = new Progression();
 let elapsed = 0;
 let dayKills = 0;
@@ -56,6 +56,7 @@ const drama = new EdgeDrama();
 let dramaClock = 0;
 let shownDramaOutcome: "fell" | "saved" | null = null;
 const button = buildChargeButton(frame);
+button.element.style.display = "none";
 
 const app = new App(canvas);
 const overlay = new DevOverlay(frame);
@@ -67,6 +68,11 @@ controls.onSteerEnd = () => steerPad.hide();
 const audio = new Audio();
 let gamePaused = false;
 let introGrace = 0;
+let countdownValue = 0;
+let countdownClock = 0;
+let playStarted = false;
+let gameReady = false;
+let startRequested = false;
 const pauseMenu = new PauseMenu(frame, {
   onPaused: (paused) => {
     gamePaused = paused;
@@ -84,7 +90,7 @@ for (const ev of ["pointerdown", "keydown"]) {
     () => {
       const wasIntro = titleScreen.open;
       audio.unlock();
-      if (wasIntro) {
+      if (wasIntro || countdownValue > 0) {
         audio.music.playIntro();
         introGrace = 0.45;
       }
@@ -99,6 +105,8 @@ const touchDevice =
   navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
 const environment = new Environment(app.scene, arena.world, { lowPower: touchDevice });
 const player = new Player(app.scene, world, new Vector3(0, 1.2, -4));
+player.rig.parts.root.setEnabled(false);
+player.rig.parts.shadow.setEnabled(false);
 const effects = new Effects(app.scene, frame);
 
 // Grass is decoration you drive through, never an obstacle — no colliders, so the
@@ -112,8 +120,8 @@ const effects = new Effects(app.scene, frame);
 const grass = new Grass(app.scene, arena.radius, {
   regions: arena.world.islands.map((i) => ({ x: i.x, z: i.z, radius: i.radius })),
   fill: true,
-  patchCount: touchDevice ? 96 : 150,
-  bladesPerPatch: touchDevice ? 170 : 300,
+  patchCount: 150,
+  bladesPerPatch: 300,
   maxRadiusFactor: 0.97,
 });
 const influencers: GrassInfluencer[] = [];
@@ -255,9 +263,6 @@ onFallCommitted((enemy) => {
   navigator.vibrate?.([0, 40, 60, 90]);
 });
 
-spawnEnemy();
-
-
 /**
  * Cars allowed on the deck at once, and how many remain to be beaten today. The
  * day ends when the quota is met and the deck is clear.
@@ -273,10 +278,71 @@ let wasCharging = false;
 let hapticT = 0;
 let scuffT = 0;
 
+function setPlayerVisible(visible: boolean): void {
+  player.rig.parts.root.setEnabled(visible);
+  player.rig.parts.shadow.setEnabled(visible);
+}
+
+function beginCountdown(): void {
+  if (playStarted || countdownValue > 0) return;
+  if (!gameReady) {
+    startRequested = true;
+    return;
+  }
+  audio.unlock();
+  audio.music.playIntro();
+  setPlayerVisible(true);
+  countdownValue = 3;
+  countdownClock = 0.82;
+  banners.show("3", "#ffd23f", 0.82);
+}
+
+function startDay(): void {
+  playStarted = true;
+  countdownValue = 0;
+  countdownClock = 0;
+  spawnEnemy();
+  audio.music.playDay(progress.day);
+  banners.show("GO!", "#7fe0a0", 0.9);
+}
+
 function frameUpdate(rawDt: number): void {
   introGrace = Math.max(0, introGrace - rawDt);
-  pauseMenu.setVisible(!titleScreen.open && !upgradeScreen.open && !dayPaused);
+  pauseMenu.setVisible(!titleScreen.open && countdownValue === 0 && !upgradeScreen.open && !dayPaused);
+  button.element.style.display = titleScreen.open || countdownValue > 0 ? "none" : "";
   if (gamePaused) return;
+  if (titleScreen.open) {
+    // The title card is a true attract state: the island animates, but the
+    // physics world, enemies, player, particles and scoring remain untouched.
+    controls.steerAmount = 0;
+    controls.charging = false;
+    controls.released = false;
+    onboarding.setHidden(true);
+    environment.update(rawDt);
+    app.updateCamera(player.vehicle.position, player.vehicle.forward, rawDt);
+    controls.endFrame();
+    return;
+  }
+  if (countdownValue > 0) {
+    countdownClock -= rawDt;
+    if (countdownClock <= 0) {
+      if (countdownValue > 1) {
+        countdownValue -= 1;
+        countdownClock = 0.82;
+        banners.show(String(countdownValue), "#ffd23f", 0.82);
+      } else {
+        startDay();
+      }
+    }
+    controls.steerAmount = 0;
+    controls.charging = false;
+    controls.released = false;
+    onboarding.setHidden(true);
+    environment.update(rawDt);
+    app.updateCamera(player.vehicle.position, player.vehicle.forward, rawDt);
+    controls.endFrame();
+    return;
+  }
   if (!titleScreen.open && !upgradeScreen.open && !dayPaused && introGrace <= 0) {
     audio.music.playDay(progress.day);
   }
@@ -545,7 +611,7 @@ function frameUpdate(rawDt: number): void {
   dramaClock += rawDt;
   const focus = drama.focus;
   app.setDramaFocus(focus ? focus.vehicle.position : null, focus ? drama.intensity : drama.intensity * 0.35);
-  speedLines.update(drama.intensity, dramaClock);
+  speedLines.update(drama.intensity, dramaClock, rawDt);
   app.updateCamera(player.vehicle.position, player.vehicle.forward, rawDt);
   // Screen-space heading for the needle: world +Z is screen up, so 0° is up and
   // the angle grows clockwise, which is exactly CSS rotate's convention.
@@ -675,4 +741,6 @@ async function endOfDay(): Promise<void> {
   banners.show(`DAY ${progress.day}`, "#7fe0a0", 1.6);
 }
 
+gameReady = true;
+if (startRequested) beginCountdown();
 app.run(frameUpdate);

@@ -25,24 +25,39 @@
  */
 export class SpeedLines {
   private readonly el: HTMLElement;
+  private vibrationCooldown = 0;
+  private wasActive = false;
 
   constructor(frame: HTMLElement) {
     this.el = document.createElement("div");
     this.el.style.cssText = `position:absolute;left:50%;top:50%;
-      width:220%;height:220%;
+      width:160%;height:160%;
       transform:translate(-50%,-50%);transform-origin:50% 50%;
       pointer-events:none;z-index:3;opacity:0;
        background:repeating-conic-gradient(from -2deg at 50% 50%,
          rgba(255,255,255,.95) 0deg 3.6deg, rgba(255,255,255,0) 3.6deg 28deg);
-       -webkit-mask-image:radial-gradient(circle at 50% 50%, transparent 4%, #000 12%);
-       mask-image:radial-gradient(circle at 50% 50%, transparent 4%, #000 12%);
+       -webkit-mask-image:radial-gradient(circle at 50% 50%,
+         transparent 0%, transparent 23%, rgba(0,0,0,.12) 31%,
+         #000 39%, #000 57%, transparent 68%);
+       mask-image:radial-gradient(circle at 50% 50%,
+         transparent 0%, transparent 23%, rgba(0,0,0,.12) 31%,
+         #000 39%, #000 57%, transparent 68%);
        filter:none;
       transition:opacity .1s linear;will-change:opacity,transform;`;
     frame.appendChild(this.el);
   }
 
   /** @param intensity 0..1 */
-  update(intensity: number, time: number): void {
+  update(intensity: number, time: number, dt = 1 / 60): void {
+    this.vibrationCooldown = Math.max(0, this.vibrationCooldown - dt);
+    const active = intensity > 0.18;
+    if (active && !this.wasActive) {
+      navigator.vibrate?.(12);
+    } else if (intensity > 0.72 && this.vibrationCooldown === 0) {
+      navigator.vibrate?.(8);
+      this.vibrationCooldown = 0.32;
+    }
+    this.wasActive = active;
     if (intensity <= 0.01) {
       this.el.style.opacity = "0";
       return;

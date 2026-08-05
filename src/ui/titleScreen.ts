@@ -7,15 +7,17 @@ import { displayType, UI_FONT } from "./theme";
  * same glyphs with a per-layer offset and a darkening ramp gives the same read at
  * title scale for nothing, and stays crisp at any resolution.
  *
- * The live island renders behind it, slowly orbiting, so the first thing you see is
- * the game rather than a static splash.
+ * The island renders behind it while gameplay stays frozen, so the first thing you
+ * see is a title card rather than an already-running round.
  */
 export class TitleScreen {
   private readonly root: HTMLElement;
+  private readonly onStart: (() => void) | null;
   private resolve: (() => void) | null = null;
   private done = false;
 
-  constructor(frame: HTMLElement) {
+  constructor(frame: HTMLElement, onStart: (() => void) | null = null) {
+    this.onStart = onStart;
     this.root = document.createElement("div");
     this.root.style.cssText = `position:absolute;inset:0;z-index:10;display:flex;
       flex-direction:column;align-items:center;justify-content:center;gap:4px;
@@ -78,6 +80,7 @@ export class TitleScreen {
   private dismiss(): void {
     if (this.done) return;
     this.done = true;
+    this.onStart?.();
     this.root.style.transition = "opacity .35s ease";
     this.root.style.opacity = "0";
     setTimeout(() => this.root.remove(), 400);
