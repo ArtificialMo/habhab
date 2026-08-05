@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node tools/create-site-worker.mjs",
+    "build": "tsc --noEmit && vite build && node tools/bundle-artifact.mjs && node tools/create-site-worker.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
