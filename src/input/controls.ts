@@ -15,6 +15,9 @@ export class Controls {
   steering = false;
   /** 0..1, how far past the deadzone the drag has travelled. */
   steerAmount = 0;
+  onSteerStart: ((x: number, y: number) => void) | null = null;
+  onSteerMove: ((x: number, y: number) => void) | null = null;
+  onSteerEnd: (() => void) | null = null;
 
   charging = false;
   /** 0..1 charge level, driven by Player. */
@@ -89,11 +92,13 @@ export class Controls {
     this.steering = true;
     this.steerAmount = 0;
     this.canvas.setPointerCapture(e.pointerId);
+    this.onSteerStart?.(e.clientX, e.clientY);
   };
 
   private readonly onMove = (e: PointerEvent) => {
     if (e.pointerId !== this.steerPointer) return;
     e.preventDefault();
+    this.onSteerMove?.(e.clientX, e.clientY);
     const dx = e.clientX - this.originX;
     const dy = e.clientY - this.originY;
     const len = Math.hypot(dx, dy);
@@ -107,6 +112,7 @@ export class Controls {
 
   private readonly onUp = (e: PointerEvent) => {
     if (e.pointerId !== this.steerPointer) return;
+    this.onSteerEnd?.();
     this.steerPointer = null;
     this.steering = false;
     this.steerAmount = 0;

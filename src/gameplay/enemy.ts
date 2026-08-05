@@ -158,6 +158,7 @@ export class Enemy {
   readonly rig: VehicleRig;
   /** Strength tier, 0..4, driving the colour gradient in §2.12. */
   readonly tier: number;
+  readonly displayName: string;
 
   private lockT = 0;
   private recoverT = 0;
@@ -170,11 +171,13 @@ export class Enemy {
     world: PhysicsWorld,
     spawn: Vector3,
     behaviour: EnemyBehaviour,
-    tier = 2
+    tier = 2,
+    displayName = "ENEMY"
   ) {
     this.vehicle = new Vehicle(scene, world, TUNING.enemy, spawn);
     this.behaviour = behaviour;
     this.tier = Math.max(0, Math.min(ENEMY_TIERS.length - 1, tier));
+    this.displayName = displayName;
     this.rig = new VehicleRig(scene, this.vehicle, enemyStyle(ENEMY_TIERS[this.tier]), `enemy${this.vehicle.id}`);
   }
 

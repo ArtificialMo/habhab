@@ -224,6 +224,8 @@ export interface Tuning {
     rear: number;
     /** Screen shake while charging, at full charge. */
     cameraTremble: number;
+    /** Small FOV pull while the ram button is held, at full charge. */
+    cameraZoom: number;
     /** Device haptic pulse interval at full charge, seconds (where supported). */
     hapticIntervalMin: number;
     hapticIntervalMax: number;
@@ -412,6 +414,7 @@ export const TUNING: Tuning = {
     squat: 0.1,
     rear: 0.075,
     cameraTremble: 0.075,
+    cameraZoom: 0.035,
     hapticIntervalMin: 0.16,
     hapticIntervalMax: 0.05,
   },

@@ -68,14 +68,19 @@ export class App {
     // high clouds, sea and distant isles fall gently out of focus. Low blur keeps
     // the cel silhouettes readable on mobile and lets the depth cue feel cinematic
     // rather than like a smeared post-process.
-    this.renderingPipeline = new DefaultRenderingPipeline("carboyDepth", true, this.scene, [this.camera]);
+    // HDR render targets are not reliable on every embedded/mobile WebGL surface.
+    // A failed HDR post-process leaves the transparent canvas visible but drops the
+    // entire 3D scene behind it, which is much worse than a softer image.
+    this.renderingPipeline = new DefaultRenderingPipeline("carboyDepth", false, this.scene, [this.camera]);
     this.renderingPipeline.fxaaEnabled = true;
     this.renderingPipeline.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
     this.renderingPipeline.depthOfField.focalLength = 32;
     this.renderingPipeline.depthOfField.fStop = 7;
     this.renderingPipeline.depthOfField.lensSize = 34;
     this.renderingPipeline.depthOfField.focusDistance = Math.hypot(TUNING.camera.height, TUNING.camera.distance);
-    this.renderingPipeline.depthOfFieldEnabled = true;
+    // Depth of field needs a depth texture. Keep the authored focus cue where the
+    // browser supports it, while leaving the base scene fully renderable elsewhere.
+    this.renderingPipeline.depthOfFieldEnabled = this.engine.getCaps().depthTextureExtension;
 
     window.addEventListener("resize", () => this.engine.resize());
   }
@@ -195,6 +200,12 @@ export class App {
     if (!TUNING.camera.shakeEnabled || amount <= 0) return;
     this.shakePhase += dt * TUNING.camera.shakeFrequency * Math.PI * 2;
     this.shake = Math.max(this.shake, amount);
+  }
+
+  /** A restrained FOV pull that builds with the ram charge and releases naturally. */
+  setChargeZoom(amount: number): void {
+    if (amount <= 0) return;
+    this.zoom = Math.min(TUNING.camera.zoomMax, Math.max(this.zoom, amount));
   }
 
   run(update: (dt: number) => void): void {

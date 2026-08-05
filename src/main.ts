@@ -31,6 +31,8 @@ import { Onboarding } from "./ui/onboarding";
 import { SpeedLines } from "./ui/screenFx";
 import { EdgeDrama } from "./gameplay/edgeDrama";
 import { PauseMenu } from "./ui/pauseMenu";
+import { MobNameDealer } from "./data/mobNames";
+import { SteerPad } from "./ui/steerPad";
 
 const frame = document.getElementById("frame")!;
 const canvas = document.getElementById("render") as HTMLCanvasElement;
@@ -52,11 +54,16 @@ const onboarding = new Onboarding(frame);
 const speedLines = new SpeedLines(frame);
 const drama = new EdgeDrama();
 let dramaClock = 0;
+let shownDramaOutcome: "fell" | "saved" | null = null;
 const button = buildChargeButton(frame);
 
 const app = new App(canvas);
 const overlay = new DevOverlay(frame);
 const controls = new Controls(canvas, button.element);
+const steerPad = new SteerPad(frame);
+controls.onSteerStart = (x, y) => steerPad.show(x, y);
+controls.onSteerMove = (x, y) => steerPad.move(x, y);
+controls.onSteerEnd = () => steerPad.hide();
 const audio = new Audio();
 let gamePaused = false;
 let introGrace = 0;
@@ -166,6 +173,7 @@ const props = new Props(
 const tracked = new Map<number, { lastX: number; lastZ: number; sinceStamp: number; driftGap: number }>();
 
 const enemies: Enemy[] = [];
+const mobNames = new MobNameDealer();
 let spawnAngle = 0;
 
 function spawnEnemy(): void {
@@ -175,7 +183,8 @@ function spawnEnemy(): void {
     world,
     arena.spawnPointOnRim(spawnAngle, 6),
     new DirectChargerBehaviour(),
-    2
+    2,
+    mobNames.next()
   );
   enemies.push(enemy);
   combat.register(enemy);
@@ -237,6 +246,7 @@ onFallCommitted((enemy) => {
   dayKills++;
   audio.splash();
   audio.knockout();
+  banners.show(enemy.displayName + " DEFEATED", "#ffd23f", 1.35);
   effects.puff(new Vector3(enemy.vehicle.position.x, -8, enemy.vehicle.position.z), 14);
   navigator.vibrate?.([0, 40, 60, 90]);
 });
@@ -272,6 +282,10 @@ function frameUpdate(rawDt: number): void {
   // Edge suspense (§2.9) scales gameplay time; the simulation itself is untouched,
   // so whether the car goes over is still decided by Havok.
   const dramaScale = drama.update(rawDt, enemies, arena);
+  if (drama.lastOutcome !== shownDramaOutcome) {
+    if (drama.lastOutcome === "saved") banners.show("NEAR MISS!", "#fff6d5", 1.15);
+    shownDramaOutcome = drama.lastOutcome;
+  }
   const dt = rawDt * app.consumeTimeScale(rawDt) * dramaScale;
 
   if (titleScreen.open) {
@@ -322,6 +336,7 @@ function frameUpdate(rawDt: number): void {
     const level = player.chargeLevel;
     audio.chargeUpdate(level);
     app.setTremble(TUNING.chargeFeel.cameraTremble * level * level, rawDt);
+    app.setChargeZoom(TUNING.chargeFeel.cameraZoom * level);
     // Haptic pulses that quicken as the wind-up tightens (§2.8).
     const cf = TUNING.chargeFeel;
     hapticT -= rawDt;

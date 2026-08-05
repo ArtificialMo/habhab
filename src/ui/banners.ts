@@ -25,6 +25,8 @@ export class Banners {
   show(text: string, colour = "#ffd23f", duration = 1.1): void {
     this.el.textContent = text;
     this.el.style.color = colour;
+    const size = Math.max(18, Math.min(36, 560 / Math.max(1, text.length)));
+    this.el.style.fontSize = String(size) + "px";
     this.life = duration;
     this.duration = duration;
     this.pop = 1;
