@@ -46,7 +46,22 @@ export class PhysicsWorld {
     const inlined = (globalThis as { __CARBOY_WASM__?: ArrayBuffer }).__CARBOY_WASM__;
     const havok = inlined
       ? await HavokPhysics({ wasmBinary: inlined })
-      : await HavokPhysics({ locateFile: () => havokWasmUrl });
+      : await HavokPhysics({
+          locateFile: (file) => {
+            const path = havokWasmUrl || file;
+            try {
+              if (typeof window !== "undefined" && window.location?.href) {
+                return new URL(path, window.location.href).href;
+              }
+              if (typeof document !== "undefined" && document.baseURI) {
+                return new URL(path, document.baseURI).href;
+              }
+              return new URL(path, "http://localhost/").href;
+            } catch {
+              return path;
+            }
+          },
+        });
     const plugin = new HavokPlugin(true, havok);
     scene.enablePhysics(new Vector3(0, TUNING.world.gravity, 0), plugin);
 

@@ -62,7 +62,7 @@ const html = `<style>
     position: relative; height: 100%; aspect-ratio: 9 / 16; max-width: 100%;
     overflow: hidden; box-shadow: 0 0 80px rgba(0,0,0,.6);
   }
-  #render { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+  #render { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; z-index: 1; }
   #boot {
     position: absolute; inset: 0; display: grid; place-items: center; z-index: 20;
     color: #ffd23f; letter-spacing: .28em; font-size: 13px; background: #0a0e18;

@@ -34,15 +34,25 @@
         height: 100%;
         aspect-ratio: 9 / 16;
         max-width: 100%;
-        background: #2b2e33;
+        background: linear-gradient(
+          to bottom,
+          #1f6fd0 0%,
+          #3f95e6 32%,
+          #71bdf3 58%,
+          #a8dcf7 76%,
+          #cfeaf6 100%
+        );
         overflow: hidden;
       }
       #render {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         display: block;
         touch-action: none;
         outline: none;
+        z-index: 1;
       }
     </style>
   </head>

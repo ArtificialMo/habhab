@@ -52,6 +52,7 @@ export class App {
     );
     const maxPixelRatio = touchDevice ? 1.25 : 2;
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, maxPixelRatio));
+    this.engine.resize();
     this.scene = new Scene(this.engine);
     // Use opaque sky blue clearColor to ensure 3D scene renders reliably across all post-processing pipelines.
     this.scene.clearColor = new Color4(0.12, 0.42, 0.78, 1);
