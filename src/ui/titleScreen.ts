@@ -78,8 +78,8 @@ export class TitleScreen {
       }
 
       @keyframes carboyButtonIn {
-        0% { opacity:0; transform:translateY(20px); }
-        100% { opacity:1; transform:translateY(0); }
+        0% { opacity:0; transform:translate(-50%,20px); }
+        100% { opacity:1; transform:translate(-50%,0); }
       }
 
       .carboyV14Letter {
@@ -138,7 +138,7 @@ export class TitleScreen {
         opacity:0;
       }
       .carboySplashButton.show { animation:carboyButtonIn .28s ease-out both; }
-      .carboySplashButton:active { transform:translateY(2px) scale(.98); }
+      .carboySplashButton:active { transform:translate(-50%,2px) scale(.98); }
       .carboySplashButton:disabled { opacity:.4; }
     `;
     document.head.appendChild(style);
@@ -202,7 +202,7 @@ export class TitleScreen {
     this.startButton.className = "carboySplashButton";
     this.startButton.textContent = "Tap to start.";
     this.startButton.setAttribute("aria-label", "Tap to start game");
-    this.startButton.style.cssText += `position:absolute;left:50%;top:61%;transform:translateX(-50%);z-index:5;`;
+    this.startButton.style.cssText += `position:absolute;left:50%;top:61%;z-index:5;`;
 
     this.splash.append(this.title, this.subtitle, this.startButton);
     this.root.append(this.splash, this.gate);
