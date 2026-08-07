@@ -1,22 +1,31 @@
-import { displayType, slateStyle, UI_FONT } from "./theme";
+import { UI_FONT } from "./theme";
 
 /**
- * Intro title card for CAR BOY / Trouble in paradise.
+ * CARBOY title flow.
  *
- * The face stays white while layered grayscale shadows fake a small polygonal
- * extrusion. Each glyph has its own landing beat so the word arrives as a
- * sequence of impacts instead of a single flat title.
+ * The first screen is deliberately nothing but a white autoplay gate. The first
+ * user gesture unlocks music, then the gate disappears and the live Babylon
+ * island remains visible behind this transparent title treatment.
+ *
+ * The title intentionally mirrors the V14 feel: heavy white pseudo-extruded
+ * letters, 100 ms staggered impacts, hard squash/rebound, white dust cloudlets,
+ * a subtitle that rises from below and collides with the title, and camera kicks
+ * routed through onImpact.
  */
 export class TitleScreen {
-  private readonly root: HTMLElement;
+  private readonly root: HTMLDivElement;
+  private readonly gate: HTMLButtonElement;
+  private readonly splash: HTMLDivElement;
+  private readonly title: HTMLDivElement;
+  private readonly letters: HTMLSpanElement[] = [];
+  private readonly subtitle: HTMLDivElement;
+  private readonly startButton: HTMLButtonElement;
   private readonly onStart: (() => void) | null;
   private readonly onIntroComplete: (() => void) | null;
   private readonly onImpact: ((amount: number) => void) | null;
-  private readonly letters: HTMLElement[] = [];
-  private readonly subtitle: HTMLElement;
-  private readonly startButton: HTMLButtonElement;
   private resolve: (() => void) | null = null;
   private introRun = 0;
+  private gateOpened = false;
   private started = false;
   private done = false;
 
@@ -29,157 +38,327 @@ export class TitleScreen {
     this.onStart = onStart;
     this.onIntroComplete = onIntroComplete;
     this.onImpact = onImpact;
-    this.root = document.createElement("div");
-    this.root.style.cssText = `position:absolute;inset:0;z-index:10;display:flex;
-      flex-direction:column;align-items:center;justify-content:center;gap:4px;
-      padding-bottom:5%;
-      background:linear-gradient(180deg,rgba(4,10,26,.54),rgba(4,10,26,.15) 44%,rgba(4,10,26,.48));
-      -webkit-user-select:none;user-select:none;cursor:default;
-      font-family:${UI_FONT};`;
-
-    const title = document.createElement("div");
-    title.setAttribute("aria-label", "CAR BOY");
-    title.style.cssText = `position:relative;width:100%;height:132px;
-      display:flex;align-items:flex-end;justify-content:center;gap:0;
-      perspective:720px;transform-style:preserve-3d;`;
-
-    let letterIndex = 0;
-    for (const char of "CAR BOY") {
-      if (char === " ") {
-        const spacer = document.createElement("span");
-        spacer.setAttribute("aria-hidden", "true");
-        spacer.style.cssText = "display:inline-block;width:.25em;";
-        title.appendChild(spacer);
-        continue;
-      }
-
-      const letter = document.createElement("span");
-      letter.className = "carboyTitleLetter";
-      letter.textContent = char;
-      letter.setAttribute("aria-hidden", "true");
-      letter.style.cssText = `display:inline-block;transform-origin:50% 100%;
-        transform-style:preserve-3d;${displayType(72)}
-        color:#fff;-webkit-text-stroke:1px #fff;
-        text-shadow:1px 2px 0 #e0e5ec,2px 4px 0 #c1cad6,3px 6px 0 #9ba8b8,
-          0 14px 24px rgba(0,0,0,.66);
-        --carboy-tilt:${letterIndex % 2 === 0 ? "-8deg" : "8deg"};
-        animation-delay:${letterIndex * 0.27}s;`;
-      this.letters.push(letter);
-      title.appendChild(letter);
-      letterIndex++;
-    }
-
-    this.subtitle = document.createElement("div");
-    this.subtitle.className = "carboySubtitle";
-    this.subtitle.textContent = "Trouble in paradise";
-    this.subtitle.style.cssText = `margin-top:20px;font:800 17px/1 ${UI_FONT};
-      letter-spacing:.18em;color:#fff;text-shadow:0 3px 0 rgba(26,38,58,.8),
-      0 0 14px rgba(255,255,255,.25);font-style:italic;`;
-
-    this.startButton = document.createElement("button");
-    this.startButton.type = "button";
-    this.startButton.className = "carboyStartButton";
-    this.startButton.textContent = "START GAME";
-    this.startButton.setAttribute("aria-label", "Start game");
-    this.startButton.style.cssText = `width:min(78vw,300px);min-height:82px;margin-top:38px;
-      padding:18px 24px 16px;box-sizing:border-box;appearance:none;cursor:pointer;
-      touch-action:manipulation;${displayType(22)}letter-spacing:.08em;
-      ${slateStyle(10)}
-      text-shadow:0 2px 0 rgba(255,255,255,.8);transition:transform .08s ease,box-shadow .08s ease;`;
 
     const style = document.createElement("style");
     style.textContent = `
-      @keyframes carboyLetterSlam{
-        0%{opacity:0;transform:translate3d(0,-170px,0) rotateX(74deg) rotateZ(var(--carboy-tilt)) scale(.78);filter:blur(4px)}
-        56%{opacity:1;transform:translate3d(0,12px,0) rotateX(-8deg) rotateZ(0deg) scale(1.05);filter:blur(0)}
-        76%{transform:translate3d(0,-5px,0) rotateX(2deg) scale(.98)}
-        100%{opacity:1;transform:translate3d(0,0,0) rotateX(0deg) rotateZ(0deg) scale(1)}
+      @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500&display=swap&text=Trouble%20in%20Paradise');
+
+      @keyframes carboyV14LetterSlam {
+        0% {
+          opacity:0;
+          transform:translate3d(0,-46vh,0) rotateX(var(--rx)) rotateY(var(--ry)) rotateZ(var(--rz)) scale3d(.82,1.42,.9);
+        }
+        66% {
+          opacity:1;
+          transform:translate3d(0,0,0) rotateX(var(--rx)) rotateY(var(--ry)) rotateZ(var(--rz)) scale3d(1.30,.48,1.16);
+        }
+        77% {
+          transform:translate3d(0,-18px,0) rotateX(var(--rx)) rotateY(var(--ry)) rotateZ(var(--rz)) scale3d(.92,1.20,.96);
+        }
+        87% {
+          transform:translate3d(0,7px,0) rotateX(var(--rx)) rotateY(var(--ry)) rotateZ(var(--rz)) scale3d(1.08,.88,1.04);
+        }
+        100% {
+          opacity:1;
+          transform:translate3d(0,0,0) rotateX(var(--rx)) rotateY(var(--ry)) rotateZ(var(--rz)) scale3d(1,1,1);
+        }
       }
-      @keyframes carboySubtitleSlam{
-        0%{opacity:0;transform:translate3d(0,130px,0) scaleY(.72)}
-        64%{opacity:1;transform:translate3d(0,-8px,0) scaleY(1.04)}
-        100%{opacity:1;transform:translate3d(0,0,0) scaleY(1)}
+
+      @keyframes carboyV14SubtitleHit {
+        0% { opacity:0; transform:translate3d(-50%,62vh,0) scale3d(1,1,1); }
+        72% { opacity:1; transform:translate3d(-50%,-34px,0) scale3d(1,.82,1); }
+        79% { transform:translate3d(-50%,-34px,0) scale3d(1,.72,1); }
+        86% { transform:translate3d(-50%,5px,0) scale3d(1,1.07,1); }
+        100% { opacity:1; transform:translate3d(-50%,0,0) scale3d(1,1,1); }
       }
-      .carboyTitleLetter{animation:carboyLetterSlam .42s cubic-bezier(.16,.88,.28,1) both}
-      .carboySubtitle{animation:carboySubtitleSlam .44s cubic-bezier(.16,.88,.28,1) 1.54s both}
-      .carboyStartButton:active{
-        transform:translateY(8px);
-        box-shadow:0 1px 0 #a7b0c0,0 2px 0 #8d97a8,0 4px 10px rgba(4,10,26,.5),inset 0 2px 0 rgba(255,255,255,.95);
+
+      @keyframes carboyPuffShrink {
+        0% { transform:translate3d(var(--dx0),0,0) scale(var(--size)); opacity:1; }
+        100% { transform:translate3d(var(--dx1),var(--dy1),0) scale(0); opacity:1; }
       }
-      .carboyStartButton:disabled{cursor:default}
+
+      @keyframes carboyButtonIn {
+        0% { opacity:0; transform:translateY(20px); }
+        100% { opacity:1; transform:translateY(0); }
+      }
+
+      .carboyV14Letter {
+        display:inline-block;
+        position:relative;
+        transform-origin:50% 100%;
+        transform-style:preserve-3d;
+        color:#fff;
+        font-family:Arial Black,Arial,Helvetica,sans-serif;
+        font-weight:900;
+        font-size:clamp(54px,16vw,108px);
+        line-height:.86;
+        letter-spacing:-.075em;
+        -webkit-text-stroke:1px rgba(255,255,255,.98);
+        text-shadow:
+          1px 1px 0 #f5f6f7,
+          2px 2px 0 #e9ebee,
+          3px 3px 0 #d9dde1,
+          4px 4px 0 #c7ccd2,
+          5px 5px 0 #b5bbc3,
+          6px 6px 0 #9fa7b1,
+          7px 7px 0 #89939f,
+          9px 12px 18px rgba(15,24,31,.28);
+        will-change:transform;
+      }
+
+      .carboyV14Letter.slam {
+        animation:carboyV14LetterSlam .62s cubic-bezier(.18,.88,.22,1.02) both;
+        animation-delay:var(--delay);
+      }
+
+      .carboyDust {
+        position:absolute;
+        width:14px;
+        height:14px;
+        border-radius:50%;
+        background:#fff;
+        pointer-events:none;
+        z-index:4;
+        animation:carboyPuffShrink .34s cubic-bezier(.12,.58,.27,.98) forwards;
+      }
+
+      .carboySplashButton {
+        border:1px solid rgba(255,255,255,.72);
+        border-radius:999px;
+        background:rgba(255,255,255,.90);
+        color:#111;
+        min-width:154px;
+        padding:13px 23px 12px;
+        font:600 15px/1.1 Poppins,${UI_FONT};
+        cursor:pointer;
+        touch-action:manipulation;
+        box-shadow:0 8px 30px rgba(10,23,34,.14);
+        backdrop-filter:blur(12px);
+        -webkit-backdrop-filter:blur(12px);
+        opacity:0;
+      }
+      .carboySplashButton.show { animation:carboyButtonIn .28s ease-out both; }
+      .carboySplashButton:active { transform:translateY(2px) scale(.98); }
+      .carboySplashButton:disabled { opacity:.4; }
     `;
     document.head.appendChild(style);
 
-    this.root.append(title, this.subtitle, this.startButton);
+    this.root = document.createElement("div");
+    this.root.style.cssText = `position:absolute;inset:0;z-index:30;overflow:hidden;
+      -webkit-user-select:none;user-select:none;touch-action:manipulation;`;
+
+    // Screen 1: intentionally only white + black text, nothing else.
+    this.gate = document.createElement("button");
+    this.gate.type = "button";
+    this.gate.textContent = "Tap to start.";
+    this.gate.setAttribute("aria-label", "Tap to start");
+    this.gate.style.cssText = `position:absolute;inset:0;z-index:20;border:0;border-radius:0;
+      margin:0;padding:0;background:#fff;color:#000;display:grid;place-items:center;
+      font:500 18px/1.2 Arial,Helvetica,sans-serif;letter-spacing:0;cursor:pointer;
+      touch-action:manipulation;outline:none;`;
+
+    // Screen 2: transparent so the live island is the splash background.
+    this.splash = document.createElement("div");
+    this.splash.style.cssText = `position:absolute;inset:0;z-index:10;opacity:0;
+      pointer-events:none;transition:opacity .20s ease;`;
+
+    this.title = document.createElement("div");
+    this.title.setAttribute("aria-label", "CARBOY");
+    this.title.style.cssText = `position:absolute;left:50%;top:29%;transform:translateX(-50%);
+      width:100%;display:flex;align-items:flex-end;justify-content:center;gap:.01em;
+      perspective:900px;transform-style:preserve-3d;white-space:nowrap;z-index:3;`;
+
+    const rotations = [
+      [-2.1, 1.4, -1.8],
+      [1.8, -1.1, 1.2],
+      [-1.4, 2.0, -.7],
+      [2.2, -1.7, 1.6],
+      [-1.7, 1.1, -1.2],
+      [1.3, -2.2, 1.9],
+    ];
+
+    for (const [index, char] of [..."CARBOY"].entries()) {
+      const letter = document.createElement("span");
+      const [rx, ry, rz] = rotations[index];
+      letter.className = "carboyV14Letter";
+      letter.textContent = char;
+      letter.style.setProperty("--delay", `${index * 0.10}s`);
+      letter.style.setProperty("--rx", `${rx}deg`);
+      letter.style.setProperty("--ry", `${ry}deg`);
+      letter.style.setProperty("--rz", `${rz}deg`);
+      this.letters.push(letter);
+      this.title.appendChild(letter);
+    }
+
+    this.subtitle = document.createElement("div");
+    this.subtitle.textContent = "Trouble in Paradise";
+    this.subtitle.style.cssText = `position:absolute;left:50%;top:43.2%;transform:translateX(-50%);
+      width:max-content;max-width:92%;white-space:nowrap;color:#090909;text-align:center;
+      font:500 clamp(22px,6.2vw,42px)/1 Poppins,Arial,Helvetica,sans-serif;
+      letter-spacing:-.035em;opacity:0;z-index:3;will-change:transform;`;
+
+    this.startButton = document.createElement("button");
+    this.startButton.type = "button";
+    this.startButton.className = "carboySplashButton";
+    this.startButton.textContent = "Tap to start.";
+    this.startButton.setAttribute("aria-label", "Tap to start game");
+    this.startButton.style.cssText += `position:absolute;left:50%;top:61%;transform:translateX(-50%);z-index:5;`;
+
+    this.splash.append(this.title, this.subtitle, this.startButton);
+    this.root.append(this.splash, this.gate);
     frame.appendChild(this.root);
 
-    const start = (event: Event) => {
+    const openGate = (event: Event) => {
       event.preventDefault();
-      this.beginStart();
+      event.stopPropagation();
+      this.openSplash();
     };
-    this.startButton.addEventListener("pointerdown", start, { passive: false });
-    this.startButton.addEventListener("click", start);
-    this.startButton.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") start(event);
+    this.gate.addEventListener("pointerdown", openGate, { passive: false });
+    this.gate.addEventListener("click", openGate);
+    this.gate.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") openGate(event);
     });
 
-    this.playIntroSequence();
+    const startGame = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.beginGame();
+    };
+    this.startButton.addEventListener("pointerdown", startGame, { passive: false });
+    this.startButton.addEventListener("click", startGame);
+    this.startButton.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") startGame(event);
+    });
   }
 
   get open(): boolean {
     return !this.done;
   }
 
-  /** Test seam: start the game without a real pointer event. */
   startNow(): void {
-    this.beginStart();
+    if (!this.gateOpened) this.openSplash();
+    else this.beginGame();
   }
 
-  private beginStart(): void {
-    if (this.started || this.done) return;
-    this.started = true;
-    this.startButton.disabled = true;
-    this.startButton.style.opacity = ".38";
+  private openSplash(): void {
+    if (this.gateOpened || this.done) return;
+    this.gateOpened = true;
+
+    // This callback is intentionally fired from the user's first gesture: it is
+    // what unlocks the browser audio policy and starts the rotating intro tracks.
     this.onStart?.();
-    this.playIntroSequence();
-    window.setTimeout(() => {
-      if (this.done) return;
-      this.onIntroComplete?.();
-      this.dismiss();
-    }, 2200);
+
+    this.gate.style.transition = "opacity .16s ease";
+    this.gate.style.opacity = "0";
+    this.gate.style.pointerEvents = "none";
+    this.splash.style.pointerEvents = "auto";
+    this.splash.style.opacity = "1";
+
+    window.setTimeout(() => this.gate.remove(), 190);
+    window.setTimeout(() => this.playIntroSequence(), 110);
   }
 
   private playIntroSequence(): void {
     const run = ++this.introRun;
-    for (const letter of this.letters) letter.style.animation = "none";
-    this.subtitle.style.animation = "none";
-    void this.root.offsetWidth;
-    for (const letter of this.letters) letter.style.animation = "";
-    this.subtitle.style.animation = "";
 
-    this.letters.forEach((_, index) => {
+    for (const letter of this.letters) {
+      letter.classList.remove("slam");
+      void letter.offsetWidth;
+      letter.classList.add("slam");
+    }
+
+    this.subtitle.style.animation = "none";
+    this.startButton.classList.remove("show");
+    void this.subtitle.offsetWidth;
+    this.subtitle.style.animation = "carboyV14SubtitleHit .78s cubic-bezier(.20,.82,.24,1) .68s both";
+
+    this.letters.forEach((letter, index) => {
       window.setTimeout(() => {
-        if (this.introRun === run) this.onImpact?.(0.72);
-      }, 300 + index * 270);
+        if (this.introRun !== run || this.done) return;
+        this.onImpact?.(.66 + index * .018);
+        this.emitDust(letter);
+      }, 410 + index * 100);
     });
+
     window.setTimeout(() => {
-      if (this.introRun === run) this.onImpact?.(0.52);
-    }, 1840);
+      if (this.introRun !== run || this.done) return;
+      this.onImpact?.(.48);
+      this.emitSubtitleDust();
+    }, 1260);
+
+    window.setTimeout(() => {
+      if (this.introRun !== run || this.done) return;
+      this.startButton.classList.add("show");
+    }, 1510);
+  }
+
+  private emitDust(letter: HTMLElement): void {
+    const frameRect = this.root.getBoundingClientRect();
+    const rect = letter.getBoundingClientRect();
+    const baseX = rect.left - frameRect.left + rect.width * .5;
+    const baseY = rect.bottom - frameRect.top - 3;
+    this.emitCloudlets(baseX, baseY, Math.max(24, rect.width * .55));
+  }
+
+  private emitSubtitleDust(): void {
+    const frameRect = this.root.getBoundingClientRect();
+    const rect = this.subtitle.getBoundingClientRect();
+    this.emitCloudlets(
+      rect.left - frameRect.left + rect.width * .5,
+      rect.top - frameRect.top + 4,
+      Math.max(62, rect.width * .22)
+    );
+  }
+
+  private emitCloudlets(x: number, y: number, width: number): void {
+    const clouds = 5 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < clouds; i++) {
+      const pieces = 2 + Math.floor(Math.random() * 2);
+      const side = Math.random() < .5 ? -1 : 1;
+      const cloudX = x + (Math.random() - .5) * width;
+      const travel = side * (26 + Math.random() * 58);
+      const rise = -(8 + Math.random() * 34);
+      const baseSize = 5 + Math.random() * 12;
+      for (let piece = 0; piece < pieces; piece++) {
+        const puff = document.createElement("span");
+        puff.className = "carboyDust";
+        const size = baseSize * (.66 + Math.random() * .72);
+        puff.style.left = `${cloudX + (Math.random() - .5) * 13}px`;
+        puff.style.top = `${y + (Math.random() - .5) * 8}px`;
+        puff.style.width = `${size}px`;
+        puff.style.height = `${size}px`;
+        puff.style.setProperty("--size", String(.9 + Math.random() * .75));
+        puff.style.setProperty("--dx0", "0px");
+        puff.style.setProperty("--dx1", `${travel + (Math.random() - .5) * 18}px`);
+        puff.style.setProperty("--dy1", `${rise + (Math.random() - .5) * 15}px`);
+        this.splash.appendChild(puff);
+        puff.addEventListener("animationend", () => puff.remove(), { once: true });
+      }
+    }
+  }
+
+  private beginGame(): void {
+    if (this.started || this.done || !this.gateOpened) return;
+    this.started = true;
+    this.startButton.disabled = true;
+    this.onIntroComplete?.();
+    this.dismiss();
   }
 
   private dismiss(): void {
     if (this.done) return;
     this.done = true;
-    this.root.style.transition = "opacity .35s ease";
+    this.root.style.transition = "opacity .30s ease";
     this.root.style.opacity = "0";
-    setTimeout(() => this.root.remove(), 400);
+    this.root.style.pointerEvents = "none";
+    window.setTimeout(() => this.root.remove(), 330);
     this.resolve?.();
   }
 
   waitForStart(): Promise<void> {
     if (this.done) return Promise.resolve();
-    return new Promise((res) => {
-      this.resolve = res;
+    return new Promise((resolve) => {
+      this.resolve = resolve;
     });
   }
 }
