@@ -1,0 +1,162 @@
+name: Install exact V14 splash to main
+
+on:
+  push:
+    branches:
+      - chatgpt/build-latest-artifact
+    paths:
+      - .github/workflows/install-real-v14-splash.yml
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout integration payload
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt/build-latest-artifact
+          fetch-depth: 0
+
+      - name: Fetch and prove exact V14
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 6 --retry-delay 2 --connect-timeout 15 \
+            -H 'Bypass-Tunnel-Reminder: true' \
+            'https://carboy-v14-2d715c4c.loca.lt/CARBOY_V14.html' \
+            -o /tmp/CARBOY_V14.html
+          test "$(sha256sum /tmp/CARBOY_V14.html | awk '{print $1}')" = \
+            '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
+          grep -Fq 'getContext("webgl"' /tmp/CARBOY_V14.html
+          grep -Fq 'gl.drawElements(gl.TRIANGLES' /tmp/CARBOY_V14.html
+          grep -Fq 'impactCloudlet' /tmp/CARBOY_V14.html
+          grep -Fq 'subtitleState' /tmp/CARBOY_V14.html
+          cp staged/titleScreen.ts /tmp/titleScreen.ts
+
+      - name: Checkout current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+
+      - name: Install exact renderer and audio-gate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          cp /tmp/CARBOY_V14.html public/CARBOY_V14.html
+          cp /tmp/titleScreen.ts src/ui/titleScreen.ts
+          python <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          expected = '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
+          v14 = Path('public/CARBOY_V14.html')
+          got = hashlib.sha256(v14.read_bytes()).hexdigest()
+          if got != expected:
+              raise SystemExit(f'V14 SHA mismatch: {got}')
+
+          # The first white-gate gesture owns intro playback. Do not make an eager
+          # pre-gesture play attempt that can leave a rejected HTMLAudio play state.
+          p = Path('src/main.ts')
+          s = p.read_text()
+          eager = '''// Try the intro immediately when the page allows media autoplay. The start\n// button repeats this exact path as a user gesture on browsers that block it.\naudio.unlock();\naudio.music.playIntro();\n'''
+          if eager in s:
+              s = s.replace(eager, '// Intro music starts only from the white autoplay gate gesture.\n', 1)
+          else:
+              # Also remove the bare historical attempt if its explanatory comment
+              # changed, but only in the small region immediately after TitleScreen.
+              marker = 'const titleScreen = new TitleScreen('
+              pos = s.find(marker)
+              if pos >= 0:
+                  end = s.find(');', pos)
+                  region_end = min(len(s), end + 500)
+                  region = s[end + 2:region_end]
+                  bare = '\naudio.unlock();\naudio.music.playIntro();\n'
+                  if bare in region:
+                      region = region.replace(bare, '\n', 1)
+                      s = s[:end + 2] + region + s[region_end:]
+
+          old = '''      const wasIntro = titleScreen.open;\n      audio.unlock();\n      if (wasIntro || countdownValue > 0) {\n        audio.music.playIntro();\n        introGrace = 0.45;\n      }\n'''
+          new = '''      audio.unlock();\n      // The title gate owns the initial intro gesture. This fallback is only for\n      // countdown interactions after the V14 title has already been dismissed.\n      if (!titleScreen.open && countdownValue > 0) {\n        audio.music.playIntro();\n        introGrace = 0.45;\n      }\n'''
+          if old in s:
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # Standalone carboy-artifact.html cannot fetch public files under its
+          # strict CSP, so embed the exact V14 document as a build-time global.
+          p = Path('tools/bundle-artifact.mjs')
+          s = p.read_text()
+          if 'const v14Html =' not in s:
+              anchor = 'const musicJson = JSON.stringify(music);\n'
+              if anchor not in s:
+                  raise SystemExit('bundle musicJson anchor missing')
+              insertion = '''const musicJson = JSON.stringify(music);\nconst v14Html = readFileSync(join("dist", "CARBOY_V14.html"), "utf8");\n// Keep the outer artifact script intact even though V14 contains </script>.\nconst v14Json = JSON.stringify(v14Html).replace(/</g, "\\\\u003c");\n'''
+              s = s.replace(anchor, insertion, 1)
+          if '__CARBOY_V14_HTML__' not in s:
+              anchor = '  globalThis.__CARBOY_MUSIC__ = ${musicJson};\n'
+              if anchor not in s:
+                  raise SystemExit('bundle music global anchor missing')
+              s = s.replace(anchor, anchor + '  globalThis.__CARBOY_V14_HTML__ = ${v14Json};\n', 1)
+          p.write_text(s)
+          PY
+
+      - name: Hard acceptance checks before build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum public/CARBOY_V14.html | awk '{print $1}')" = \
+            '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
+          grep -Fq 'getContext("webgl"' public/CARBOY_V14.html
+          grep -Fq 'gl.drawElements(gl.TRIANGLES' public/CARBOY_V14.html
+          grep -Fq 'impactCloudlet' public/CARBOY_V14.html
+          grep -Fq 'subtitleState' public/CARBOY_V14.html
+          grep -Fq 'carboy-v14-frame' src/ui/titleScreen.ts
+          grep -Fq 'Swipe up to start.' src/ui/titleScreen.ts
+          grep -Fq 'this.onStart?.();' src/ui/titleScreen.ts
+          ! grep -Fq 'pseudo-extruded' src/ui/titleScreen.ts
+          ! grep -Fq 'carboyV14Letter' src/ui/titleScreen.ts
+          ! grep -Fq 'text-shadow:' src/ui/titleScreen.ts
+
+      - name: Build production game
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Validate production output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum dist/CARBOY_V14.html | awk '{print $1}')" = \
+            '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
+          grep -Fq '__CARBOY_V14_HTML__' dist/carboy-artifact.html
+          grep -Fq 'carboy-v14-frame' dist/assets/index-*.js
+          grep -Fq 'Swipe up to start.' dist/assets/index-*.js
+          ! grep -R -Fq 'heavy white pseudo-extruded' src
+          ! grep -R -Fq 'carboyV14Letter' src
+          cp dist/carboy-artifact.html public/carboy-artifact.html
+
+      - name: Commit verified production build to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/ui/titleScreen.ts src/main.ts tools/bundle-artifact.mjs \
+                  public/CARBOY_V14.html public/carboy-artifact.html
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Main already matches the verified exact-V14 build.'
+          else
+            git commit -m 'Use exact V14 WebGL splash and fix intro audio gate'
+            git push origin HEAD:main
+          fi
