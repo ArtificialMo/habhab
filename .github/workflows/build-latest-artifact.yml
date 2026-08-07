@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - chatgpt/build-latest-artifact
+    paths:
+      - .v14-ready
 
 permissions:
   contents: write
@@ -35,4 +37,3 @@ jobs:
             git commit -m "Rebuild standalone CARBOY artifact from latest source"
             git push origin HEAD:main
           fi
-# trigger: centered title gate v14 island splash
