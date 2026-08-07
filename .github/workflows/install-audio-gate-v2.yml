@@ -1,0 +1,53 @@
+name: Harden CARBOY first-tap music unlock
+
+on:
+  push:
+    branches:
+      - chatgpt/build-latest-artifact
+    paths:
+      - .github/workflows/install-audio-gate-v2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Download audio gate patch
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 4 'https://filebin.net/carboy-v14-audio-gate-v2/carboy_audio_gate_v2.tar.gz' -o /tmp/audio-gate.tar.gz
+          tar -xzf /tmp/audio-gate.tar.gz
+
+      - name: Verify exact V14 remains installed
+        run: echo '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016  public/CARBOY_V14.html' | sha256sum -c -
+
+      - name: Production build
+        run: |
+          npm ci
+          npm run build
+          cp dist/carboy-artifact.html public/carboy-artifact.html
+
+      - name: Commit to main
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/audio/music.ts src/audio/audio.ts public/carboy-artifact.html
+          if git diff --cached --quiet; then
+            echo 'Audio gate already current.'
+          else
+            git commit -m 'Guarantee intro music starts on first tap'
+            git push origin HEAD:main
+          fi
