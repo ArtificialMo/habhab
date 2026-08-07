@@ -35,4 +35,4 @@ jobs:
             git commit -m "Rebuild standalone CARBOY artifact from latest source"
             git push origin HEAD:main
           fi
-# trigger: 2026-08-07 title gate v14 island splash
+# trigger: centered title gate v14 island splash
