@@ -1,0 +1,57 @@
+name: Install exact uploaded CARBOY V14
+
+on:
+  push:
+    branches:
+      - chatgpt/build-latest-artifact
+    paths:
+      - .github/workflows/install-exact-v14.yml
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Download exact V14 integration patch
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 4 'https://filebin.net/carboy-v14-2d715c4c/carboy_v14_patch.tar.gz' -o /tmp/carboy_v14_patch.tar.gz
+          tar -xzf /tmp/carboy_v14_patch.tar.gz
+
+      - name: Verify exact uploaded V14
+        run: |
+          set -euo pipefail
+          echo '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016  public/CARBOY_V14.html' | sha256sum -c -
+
+      - name: Build production game
+        run: |
+          npm ci
+          npm run build
+
+      - name: Refresh checked-in standalone artifact
+        run: cp dist/carboy-artifact.html public/carboy-artifact.html
+
+      - name: Commit V14 splash integration to main
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/ui/titleScreen.ts src/audio/music.ts src/main.ts public/CARBOY_V14.html public/carboy-artifact.html
+          if git diff --cached --quiet; then
+            echo 'Main already contains the exact V14 integration.'
+          else
+            git commit -m 'Use exact CARBOY V14 splash and reliable audio gate'
+            git push origin HEAD:main
+          fi
