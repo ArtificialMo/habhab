@@ -13,6 +13,19 @@ type MusicGlobals = {
 
 type MusicMode = "intro" | "day" | null;
 
+function nextIntroStartIndex(): number {
+  try {
+    const key = "carboy:intro-start-index";
+    const stored = window.localStorage.getItem(key);
+    const previous = stored === "1" ? 1 : stored === "0" ? 0 : Math.random() < .5 ? 0 : 1;
+    const next = (previous + 1) % INTRO_TRACKS.length;
+    window.localStorage.setItem(key, String(next));
+    return next;
+  } catch {
+    return Math.random() < .5 ? 0 : 1;
+  }
+}
+
 /**
  * Track player for the authored Car Boy soundtrack.
  *
@@ -24,7 +37,7 @@ export class Music {
   private currentKey = "";
   private mode: MusicMode = null;
   private dayIndex = 0;
-  private introIndex = 0;
+  private introIndex = nextIntroStartIndex();
   private attached = false;
   private paused = false;
   private muted = false;
