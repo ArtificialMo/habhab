@@ -1,4 +1,4 @@
-name: Build latest CARBOY artifact to main
+name: Build exact V14 CARBOY splash to main
 
 on:
   push:
@@ -14,26 +14,106 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out current main
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          path: game
+
+      - name: Check out exact V14 payload
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt/build-latest-artifact
+          path: v14-source
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run build
-      - name: Replace stale standalone artifact on main
+          cache-dependency-path: game/package-lock.json
+
+      - name: Reconstruct and verify exact uploaded V14
+        working-directory: game
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import hashlib
+          import lzma
+
+          payload_dir = Path('../v14-source/.v14chunks')
+          chunks = sorted(payload_dir.glob('*.b85'))
+          if not chunks:
+              raise SystemExit('V14 payload chunks are missing')
+
+          encoded = ''.join(path.read_text(encoding='utf-8') for path in chunks)
+          packed = base64.b85decode(encoded.encode('ascii'))
+          raw = lzma.decompress(packed)
+
+          expected = '2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
+          actual = hashlib.sha256(raw).hexdigest()
+          print('V14 source SHA-256:', actual)
+          if actual != expected:
+              raise SystemExit(f'V14 payload hash mismatch: expected {expected}, got {actual}')
+
+          source = raw.decode('utf-8')
+          required = [
+              '<canvas id="gl"></canvas>',
+              'const DATA={"glyphs"',
+              'canvas.getContext("webgl"',
+              'gl.drawElements(gl.TRIANGLES',
+              'function impactCloudlet',
+              'function subtitleState',
+          ]
+          missing = [needle for needle in required if needle not in source]
+          if missing:
+              raise SystemExit('V14 WebGL acceptance check failed: ' + ', '.join(missing))
+
+          # Integration-only override. The renderer, mesh data, shaders, deformation,
+          # particles, subtitle timing and audio code remain byte-for-byte from V14.
+          override = '''\n<style id="carboy-v14-island-integration">\nhtml,body{background:transparent!important}\nbody{background-image:none!important}\n.hint{display:none!important}\n#gl{background:transparent!important}\n</style>\n'''
+          source = source.replace('</head>', override + '</head>', 1)
+
+          out = Path('public/CARBOY_V14.html')
+          out.write_text(source, encoding='utf-8')
+          print('wrote', out, out.stat().st_size, 'bytes')
+          PY
+
+      - name: Install dependencies
+        working-directory: game
+        run: npm ci
+
+      - name: Typecheck and build production game
+        working-directory: game
+        run: npm run build
+
+      - name: Verify built Pages output contains real V14
+        working-directory: game
+        run: |
+          test -f dist/CARBOY_V14.html
+          grep -q 'const DATA={"glyphs"' dist/CARBOY_V14.html
+          grep -q 'canvas.getContext("webgl"' dist/CARBOY_V14.html
+          grep -q 'gl.drawElements(gl.TRIANGLES' dist/CARBOY_V14.html
+          if grep -q 'carboyV14Letter' src/ui/titleScreen.ts; then
+            echo 'Pseudo-3D DOM title code is still present' >&2
+            exit 1
+          fi
+          grep -q 'this.v14.src = "/CARBOY_V14.html?v=14"' src/ui/titleScreen.ts
+
+      - name: Replace standalone artifact on main
+        working-directory: game
         run: cp dist/carboy-artifact.html public/carboy-artifact.html
-      - name: Commit fresh artifact to main
+
+      - name: Commit verified V14 splash and fresh artifact to main
+        working-directory: game
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/carboy-artifact.html
+          git add public/CARBOY_V14.html public/carboy-artifact.html
           if git diff --cached --quiet; then
-            echo "Standalone artifact already matches latest source."
+            echo "V14 splash and standalone artifact already match current source."
           else
-            git commit -m "Rebuild standalone CARBOY artifact from latest source"
+            git commit -m "Ship exact V14 WebGL splash"
             git push origin HEAD:main
           fi
