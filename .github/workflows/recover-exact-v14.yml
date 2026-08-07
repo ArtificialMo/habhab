@@ -1,0 +1,111 @@
+name: Recover exact CARBOY V14 from git history
+
+on:
+  push:
+    branches:
+      - chatgpt/build-latest-artifact
+    paths:
+      - .github/workflows/recover-exact-v14.yml
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch every remote ref and staging history
+        run: |
+          set -euo pipefail
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --tags --force
+
+      - name: Recover exact V14 blob from any historical git object
+        run: |
+          set -euo pipefail
+          EXPECTED='2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
+          SIZE='2459760'
+          mkdir -p public
+          found=''
+
+          # First try every historical version of the intended path.
+          for commit in $(git rev-list --all -- public/CARBOY_V14.html 2>/dev/null || true); do
+            if git cat-file -e "$commit:public/CARBOY_V14.html" 2>/dev/null; then
+              git show "$commit:public/CARBOY_V14.html" > /tmp/v14-candidate.html
+              hash=$(sha256sum /tmp/v14-candidate.html | awk '{print $1}')
+              if [ "$hash" = "$EXPECTED" ]; then
+                found="$commit:public/CARBOY_V14.html"
+                break
+              fi
+            fi
+          done
+
+          # If the path was renamed/deleted, scan reachable blobs of the exact byte size.
+          if [ -z "$found" ]; then
+            while read -r object path; do
+              [ -n "$object" ] || continue
+              type=$(git cat-file -t "$object" 2>/dev/null || true)
+              [ "$type" = 'blob' ] || continue
+              size=$(git cat-file -s "$object" 2>/dev/null || true)
+              [ "$size" = "$SIZE" ] || continue
+              git cat-file blob "$object" > /tmp/v14-candidate.html
+              hash=$(sha256sum /tmp/v14-candidate.html | awk '{print $1}')
+              if [ "$hash" = "$EXPECTED" ]; then
+                found="$object ${path:-historical-blob}"
+                break
+              fi
+            done < <(git rev-list --objects --all)
+          fi
+
+          if [ -z "$found" ]; then
+            echo 'Exact V14 blob was never stored as a complete git object.' >&2
+            exit 42
+          fi
+
+          cp /tmp/v14-candidate.html public/CARBOY_V14.html
+          echo "$EXPECTED  public/CARBOY_V14.html" | sha256sum -c -
+          echo "Recovered exact V14 from $found"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate source integration and build production
+        run: |
+          set -euo pipefail
+          grep -Fq '/CARBOY_V14.html' src/ui/titleScreen.ts
+          if grep -Eq 'carboyV14Letter|text-shadow:.*#|pseudo-extrud' src/ui/titleScreen.ts; then
+            echo 'Pseudo title implementation still present' >&2
+            exit 1
+          fi
+          grep -Fq 'Swipe up to start.' src/ui/titleScreen.ts
+          grep -Fq 'audio.unlock();' src/main.ts
+          grep -Fq 'audio.music.playIntro();' src/main.ts
+          npm ci
+          npm run build
+          grep -Fq 'const DATA={"glyphs"' dist/CARBOY_V14.html
+          grep -Fq 'canvas.getContext("webgl"' dist/CARBOY_V14.html
+          grep -Fq 'gl.drawElements(gl.TRIANGLES' dist/CARBOY_V14.html
+          grep -Fq 'impactCloudlet' dist/CARBOY_V14.html
+
+      - name: Refresh standalone artifact
+        run: cp dist/carboy-artifact.html public/carboy-artifact.html
+
+      - name: Commit exact V14 splash to main
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/CARBOY_V14.html public/carboy-artifact.html
+          if git diff --cached --quiet; then
+            echo 'Exact V14 already present on main.'
+          else
+            git commit -m 'Ship exact CARBOY V14 WebGL splash'
+            git push origin HEAD:main
+          fi
