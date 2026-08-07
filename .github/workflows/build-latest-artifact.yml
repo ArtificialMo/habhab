@@ -1,4 +1,4 @@
-name: Build latest CARBOY artifact
+name: Build latest CARBOY artifact to main
 
 on:
   push:
@@ -14,19 +14,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: chatgpt/build-latest-artifact
+          ref: main
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Save fresh standalone artifact
-        run: cp dist/carboy-artifact.html public/carboy-artifact-latest.html
-      - name: Commit generated artifact
+      - name: Replace stale standalone artifact on main
+        run: cp dist/carboy-artifact.html public/carboy-artifact.html
+      - name: Commit fresh artifact to main
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/carboy-artifact-latest.html
-          git diff --cached --quiet || git commit -m "Build latest standalone CARBOY artifact"
-          git push
+          git add public/carboy-artifact.html
+          if git diff --cached --quiet; then
+            echo "Standalone artifact already matches latest source."
+          else
+            git commit -m "Rebuild standalone CARBOY artifact from latest source"
+            git push origin HEAD:main
+          fi
