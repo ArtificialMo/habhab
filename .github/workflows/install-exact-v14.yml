@@ -55,3 +55,4 @@ jobs:
             git commit -m 'Use exact CARBOY V14 splash and reliable audio gate'
             git push origin HEAD:main
           fi
+# trigger exact installer 2026-08-07T17:02Z
