@@ -16,37 +16,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Try common decoders and verify exact V14 SHA-256
+      - name: Decode chunks and verify exact V14 SHA-256
         run: |
           python - <<'PY'
           from pathlib import Path
           import base64,bz2,gzip,hashlib,lzma,zlib
           target='2d715c4c21839529615ee9d051ba2bad3258e087a94dfaff376bc993fbe34016'
           files=sorted(Path('.v14chunks').glob('*.b85'))
-          raw=''.join(p.read_text().strip() for p in files).encode()
-          print('parts',len(files),'encoded-bytes',len(raw))
+          texts=[p.read_text().strip().encode() for p in files]
+          print('parts',[(p.name,len(t)) for p,t in zip(files,texts)])
           candidates=[]
-          for name,fn in [('b85',base64.b85decode),('a85',base64.a85decode)]:
-            try:
-              d=fn(raw); candidates.append((name,d)); print(name,'decoded',len(d))
-            except Exception as e: print(name,'decode failed',e)
+          # Some earlier transport chunks were independently encoded, so test both
+          # whole-stream and per-part decoding before decompression/hash validation.
+          raw=b''.join(texts)
           candidates.append(('raw',raw))
+          for enc,fn in [('b85',base64.b85decode),('a85',base64.a85decode)]:
+            try: candidates.append((enc+'-whole',fn(raw)))
+            except Exception as e: print(enc+'-whole failed',e)
+            try:
+              decoded=b''.join(fn(t) for t in texts)
+              candidates.append((enc+'-parts',decoded))
+              print(enc+'-parts decoded',len(decoded))
+            except Exception as e: print(enc+'-parts failed',e)
           decompressors=[('identity',lambda b:b),('gzip',gzip.decompress),('zlib',zlib.decompress),('bz2',bz2.decompress),('lzma',lzma.decompress)]
           found=None
           for enc,data in candidates:
             for dec,fn in decompressors:
-              try:
-                out=fn(data)
-              except Exception:
-                continue
+              try: out=fn(data)
+              except Exception: continue
               h=hashlib.sha256(out).hexdigest()
               print(enc,dec,len(out),h)
               if h==target:
-                found=out; print('MATCH',enc,dec)
-                break
+                found=out; print('MATCH',enc,dec); break
             if found is not None: break
-          if found is None:
-            raise SystemExit('No exact V14 hash match')
+          if found is None: raise SystemExit('No exact V14 hash match')
           Path('/tmp/CARBOY_V14.html').write_bytes(found)
           print('verified exact V14',len(found),target)
           PY
